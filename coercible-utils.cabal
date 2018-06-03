@@ -25,7 +25,6 @@ library
                      
   default-language:    Haskell2010
   
-
 test-suite coercible-utils-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
@@ -35,7 +34,6 @@ test-suite coercible-utils-test
                      
   ghc-options:         -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
-  
 
 benchmark coercible-utils-benchmark
   type:                exitcode-stdio-1.0
@@ -47,9 +45,7 @@ benchmark coercible-utils-benchmark
                      , gauge
                      
                      , coercible-utils
-  
 
 source-repository head
   type:                git
   location:            https://github.com/sjakobi/coercible-utils.git
-
