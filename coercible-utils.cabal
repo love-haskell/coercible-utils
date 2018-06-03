@@ -1,0 +1,55 @@
+name:                coercible-utils
+version:             0.0.0
+description:         Higher order functions for manipulating coercible values
+synopsis:            Higher order functions for manipulating coercible values
+homepage:            https://github.com/sjakobi/coercible-utils
+bug-reports:         https://github.com/sjakobi/coercible-utils/issues
+license:             BSD3
+license-file:        LICENSE
+author:              Simon Jakobi
+maintainer:          simon.jakobi@gmail.com
+copyright:           2018 Simon Jakobi
+category:            Control
+build-type:          Simple
+extra-doc-files:     README.md
+                   , CHANGELOG.md
+cabal-version:       1.24
+tested-with:         GHC == 8.2.2
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     CoercibleUtils
+                       
+  ghc-options:         -Wall
+  build-depends:       base
+                     
+  default-language:    Haskell2010
+  
+
+test-suite coercible-utils-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , coercible-utils
+                     
+  ghc-options:         -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+  
+
+benchmark coercible-utils-benchmark
+  type:                exitcode-stdio-1.0
+  default-language:    Haskell2010
+  ghc-options:         -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:      benchmark
+  main-is:             Main.hs
+  build-depends:       base
+                     , gauge
+                     
+                     , coercible-utils
+  
+
+source-repository head
+  type:                git
+  location:            https://github.com/sjakobi/coercible-utils.git
+
