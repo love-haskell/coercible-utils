@@ -7,3 +7,4 @@
 
 Higher order functions for manipulating coercible values
 
+Inspired by https://www.reddit.com/r/haskell/comments/8nk4kk/monthly_hask_anything_june_2018/e00b3ib/
