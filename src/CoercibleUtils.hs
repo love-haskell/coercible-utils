@@ -2,6 +2,18 @@ module CoercibleUtils where
 
 import Data.Coerce
 
+-- | Coercive left-composition.
+infixr 9 #.
+(#.) :: Coercible b c => (b -> c) -> (a -> b) -> a -> c
+(#.) _ = coerce
+{-# INLINE (#.) #-}
+
+-- | Coercive right-composition.
+infixr 9 .#
+(.#) :: Coercible a b => (b -> c) -> (a -> b) -> a -> c
+(.#) f _ = coerce f
+{-# INLINE (.#) #-}
+
 op :: Coercible a b
    => (a -> b)
    -> b
