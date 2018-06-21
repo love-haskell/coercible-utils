@@ -35,7 +35,7 @@ ala' :: (Coercible a b, Coercible a' b')
      -> (d -> a)
      -> c
      -> a'
-ala' _ hof f = coerce . hof (coerce f)
+ala' _ hof f = coerce #. hof (coerce f)
 {-# INLINE ala' #-}
 
 under :: (Coercible a b, Coercible a' b')
