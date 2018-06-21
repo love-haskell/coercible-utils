@@ -19,6 +19,7 @@ op :: Coercible a b
    -> b
    -> a
 op = coerce
+{-# INLINE op #-}
 
 ala :: (Coercible a b, Coercible a' b')
     => (a -> b)
@@ -26,6 +27,7 @@ ala :: (Coercible a b, Coercible a' b')
     -> c
     -> a'
 ala pa hof = ala' pa hof id
+{-# INLINE ala #-}
 
 ala' :: (Coercible a b, Coercible a' b')
      => (a -> b)
@@ -34,6 +36,7 @@ ala' :: (Coercible a b, Coercible a' b')
      -> c
      -> a'
 ala' _ hof f = coerce . hof (coerce f)
+{-# INLINE ala' #-}
 
 under :: (Coercible a b, Coercible a' b')
       => (a -> b)
@@ -41,6 +44,7 @@ under :: (Coercible a b, Coercible a' b')
       -> a
       -> a'
 under _ f = coerce f
+{-# INLINE under #-}
 
 over :: (Coercible a b, Coercible a' b')
      => (a -> b)
@@ -48,6 +52,7 @@ over :: (Coercible a b, Coercible a' b')
      -> b
      -> b'
 over _ f = coerce f
+{-# INLINE over #-}
 
 under2 :: (Coercible a b, Coercible a' b')
        => (a -> b)
@@ -56,6 +61,7 @@ under2 :: (Coercible a b, Coercible a' b')
        -> a
        -> a'
 under2 _ f = coerce f
+{-# INLINE under2 #-}
 
 over2 :: (Coercible a b, Coercible a' b')
       => (a -> b)
@@ -64,6 +70,7 @@ over2 :: (Coercible a b, Coercible a' b')
       -> b
       -> b'
 over2 _ f = coerce f
+{-# INLINE over2 #-}
 
 underF :: (Coercible a b, Coercible a' b', Functor f, Functor g)
        => (a -> b)
@@ -71,6 +78,7 @@ underF :: (Coercible a b, Coercible a' b', Functor f, Functor g)
        -> f a
        -> g a'
 underF _ f = fmap coerce . f . fmap coerce
+{-# INLINE underF #-}
 
 overF :: (Coercible a b, Coercible a' b', Functor f, Functor g)
       => (a -> b)
@@ -78,3 +86,5 @@ overF :: (Coercible a b, Coercible a' b', Functor f, Functor g)
       -> f b
       -> g b'
 overF _ f = fmap coerce . f . fmap coerce
+{-# INLINE overF #-}
+
