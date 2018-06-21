@@ -21,7 +21,7 @@ library
   exposed-modules:     CoercibleUtils
                        
   ghc-options:         -Wall
-  build-depends:       base >= 4.8
+  build-depends:       base >= 4.8 && < 4.13
                      
   default-language:    Haskell2010
   
