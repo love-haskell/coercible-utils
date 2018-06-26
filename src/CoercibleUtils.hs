@@ -4,16 +4,16 @@ Primarily pulled from the package `newtype-generics`, and
 based on Conor McBride's Epigram work, but
 generalised to work over anything `Coercible`.
 
->>> ala Sum foldMap [1,2,3,4]
+>>> ala Sum foldMap [1,2,3,4 :: Int] :: Int
 10
 
->>> ala Endo foldMap [(+1), (+2), (subtract 1), (*2)] 3
+>>> ala Endo foldMap [(+1), (+2), (subtract 1), (*2) :: Int -> Int] (3 :: Int) :: Int
 8
 
->>> under2 Min (<>) 2 1
+>>> under2 Min (<>) 2 (1 :: Int) :: Int
 1
 
->>> over All not (All False)
+>>> over All not (All False) :: All
 All {getAll = True)
 
 Users might also find the GHC plugin <https://github.com/mpickering/hashtag-coerce hashtag-coerce> useful in tandem with this library.
@@ -91,7 +91,7 @@ op = coerce
 --   Being handed the "packer", the /hof/ may apply it in any structure of its choosing –
 --   in this case a tuple.
 --
--- >>> ala Sum foldMap [1,2,3,4]
+-- >>> ala Sum foldMap [1,2,3,4 :: Int] :: Int
 -- 10
 ala :: (Coercible a b, Coercible a' b')
     => (a -> b)
@@ -109,10 +109,10 @@ ala pa hof = ala' pa hof id
 --   If you want the convenience of being able to hook right into the hof,
 --   you may use this function.
 --
--- >>> ala' Sum foldMap length ["hello", "world"]
+-- >>> ala' Sum foldMap length ["hello", "world"] :: Int
 -- 10
 --
--- >>> ala' First foldMap (readMaybe @Int) ["x", "42", "1"]
+-- >>> ala' First foldMap (readMaybe @Int) ["x", "42", "1"] :: Maybe Int
 -- Just 42
 ala' :: (Coercible a b, Coercible a' b')
      => (a -> b)
@@ -125,7 +125,7 @@ ala' _ hof f = coerce #. hof (coerce f)
 
 -- | A very simple operation involving running the function \'under\' the \"packer\".
 --
--- >>> under Product (stimes 3) 3
+-- >>> under Product (stimes 3) (3 :: Int) :: Int
 -- 27
 under :: (Coercible a b, Coercible a' b')
       => (a -> b)
@@ -139,7 +139,7 @@ under _ f = coerce f
 --   underlying \"unpacked\" types, and switch it to a function that works
 --   on the \"packer\".
 --
--- >>> over All not (All False)
+-- >>> over All not (All False) :: All
 -- All {getAll = True}
 over :: (Coercible a b, Coercible a' b')
      => (a -> b)
@@ -151,7 +151,7 @@ over _ f = coerce f
 
 -- | Lower a binary function to operate on the underlying values.
 --
--- >>> under2 Any (<>) True False
+-- >>> under2 Any (<>) True False :: Bool
 -- True
 under2 :: (Coercible a b, Coercible a' b')
        => (a -> b)
