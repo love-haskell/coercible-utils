@@ -1,7 +1,7 @@
 Change log
 ==========
 
-coercible-utils uses [PVP Versioning][1].
+`coercible-utils` uses [PVP Versioning][1].
 
 0
 =
