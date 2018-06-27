@@ -1,5 +1,5 @@
 name:                coercible-utils
-version:             0.0.0
+version:             0
 description:         Higher order functions for manipulating coercible values
 synopsis:            Higher order functions for manipulating coercible values
 homepage:            https://github.com/sjakobi/coercible-utils
