@@ -77,18 +77,20 @@ op = coerce
 {-# INLINE op #-}
 
 -- | The workhorse of the package. Given a "packer" and a \"higher order function\" (/hof/),
---   it handles the packing and unpacking, and just sends you back a regular old
---   function, with the type varying based on the /hof/ you passed.
+-- it handles the packing and unpacking, and just sends you back a regular old
+-- function, with the type varying based on the /hof/ you passed.
 --
---   The reason for the signature of the /hof/ is due to 'ala' not caring about structure.
---   To illustrate why this is important, consider this alternative implementation of 'under2':
+-- The reason for the signature of the /hof/ is due to 'ala' not caring about structure.
+-- To illustrate why this is important, consider this alternative implementation of 'under2':
 --
---   > under2' :: (Coercible a b, Coercible a' b')
---   >        => (a -> b) -> (b -> b -> b') -> (a -> a -> a')
---   > under2' pa f o1 o2 = ala pa (\p -> uncurry f . bimap p p) (o1, o2)
+-- @
+-- under2' :: (Coercible a b, Coercible a' b')
+--         => (a -> b) -> (b -> b -> b') -> (a -> a -> a')
+-- under2' pa f o1 o2 = 'ala' pa (\\p -> uncurry f . bimap p p) (o1, o2)
+-- @
 --
---   Being handed the "packer", the /hof/ may apply it in any structure of its choosing –
---   in this case a tuple.
+-- Being handed the "packer", the /hof/ may apply it in any structure of its choosing –
+-- in this case a tuple.
 --
 -- >>> ala Sum foldMap [1,2,3,4 :: Int] :: Int
 -- 10
