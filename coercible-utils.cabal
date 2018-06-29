@@ -1,5 +1,5 @@
 name:                coercible-utils
-version:             0
+version:             0.0.0
 description:         Utility functions for Coercible types.
 synopsis:            Utility functions for Coercible types.
 homepage:            https://github.com/sjakobi/coercible-utils
