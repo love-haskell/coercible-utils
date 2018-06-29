@@ -15,6 +15,9 @@ generalised to work over anything `Coercible`.
 
 >>> over All not (All False) :: All
 All {getAll = True)
+
+__Note__: All of the functions in this module take an argument that solely
+directs the /type/ of the coercion. The value of this argument is /ignored/.
 -}
 module CoercibleUtils
   ( -- * Coercive composition
@@ -62,9 +65,7 @@ infixr 9 .#
 (.#) f _ = coerce f
 {-# INLINE (.#) #-}
 
--- | The first parameter is /completely ignored/ on the value level,
---   meaning the only reason you pass in the constructor is to provide type
---   information.
+-- | Reverse the type of a "packer".
 --
 -- >>> op Identity (Identity 3)
 -- 3
