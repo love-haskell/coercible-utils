@@ -11,8 +11,7 @@ maintainer:          simon.jakobi@gmail.com
 copyright:           2018 Simon Jakobi, chessai
 category:            Control
 build-type:          Simple
-extra-doc-files:     README.md
-                   , CHANGELOG.md
+extra-doc-files:     CHANGELOG.md
 cabal-version:       1.24
 tested-with:         GHC == 7.10.3
                    , GHC == 8.0.2
