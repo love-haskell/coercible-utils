@@ -1,11 +1,12 @@
-Change log
-==========
+# Changelog
+`coercible-utils` uses [PVP Versioning][PVP].
 
-`coercible-utils` uses [PVP Versioning][1].
+## [0.0.0] – 2018-06-29
+Initial release.
 
-0
-=
-* Initial release.
 
-[1]: https://pvp.haskell.org
+[Unreleased]: https://github.com/sjakobi/coercible-utils/compare/v0.0.0...HEAD
+[0.0.0]: https://github.com/sjakobi/coercible-utils/releases/tag/v0.0.0
+
+[PVP]: https://pvp.haskell.org
 
