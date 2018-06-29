@@ -14,7 +14,7 @@ generalised to work over anything `Coercible`.
 1
 
 >>> over All not (All False) :: All
-All {getAll = True)
+All {getAll = True}
 
 __Note__: All of the functions in this module take an argument that solely
 directs the /type/ of the coercion. The value of this argument is /ignored/.
