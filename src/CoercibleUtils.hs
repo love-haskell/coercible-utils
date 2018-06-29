@@ -67,7 +67,9 @@ infixr 9 .#
 
 -- | Reverse the type of a "packer".
 --
--- >>> op Identity (Identity 3)
+-- >>> op All (All True)
+-- True
+-- >>> op (Identity . Sum) (Identity (Sum 3))
 -- 3
 op :: Coercible a b
    => (a -> b)
