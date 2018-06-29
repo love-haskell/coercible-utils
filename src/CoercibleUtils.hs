@@ -15,8 +15,6 @@ generalised to work over anything `Coercible`.
 
 >>> over All not (All False) :: All
 All {getAll = True)
-
-Users might also find the GHC plugin @<https://github.com/mpickering/hashtag-coerce hashtag-coerce>@ useful in tandem with this library.
 -}
 module CoercibleUtils
   ( -- * Coercive composition
