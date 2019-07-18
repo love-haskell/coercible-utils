@@ -45,7 +45,7 @@ import Data.Coerce (Coercible, coerce)
 -- p '#.' f ≡ p '.' f
 -- @
 infixr 9 #.
-(#.) :: Coercible b c => (b -> c) -> (a -> b) -> a -> c
+(#.) :: Coercible b c => p b c -> (a -> b) -> a -> c
 (#.) _ = coerce
 {-# INLINE (#.) #-}
 
@@ -61,7 +61,7 @@ infixr 9 #.
 -- f '.#' p ≡ p '.' f
 -- @
 infixr 9 .#
-(.#) :: Coercible a b => (b -> c) -> (a -> b) -> a -> c
+(.#) :: Coercible a b => (b -> c) -> p a b -> a -> c
 (.#) f _ = coerce f
 {-# INLINE (.#) #-}
 
@@ -72,7 +72,7 @@ infixr 9 .#
 -- >>> op (Identity . Sum) (Identity (Sum 3))
 -- 3
 op :: Coercible a b
-   => (a -> b)
+   => p a b
    -> b
    -> a
 op = coerce
@@ -97,7 +97,7 @@ op = coerce
 -- >>> ala Sum foldMap [1,2,3,4 :: Int] :: Int
 -- 10
 ala :: (Coercible a b, Coercible a' b')
-    => (a -> b)
+    => p a b
     -> ((a -> b) -> c -> b')
     -> c
     -> a'
@@ -118,7 +118,7 @@ ala pa hof = ala' pa hof id
 -- >>> ala' First foldMap (readMaybe @Int) ["x", "42", "1"] :: Maybe Int
 -- Just 42
 ala' :: (Coercible a b, Coercible a' b')
-     => (a -> b)
+     => p a b
      -> ((d -> b) -> c -> b')
      -> (d -> a)
      -> c
@@ -131,7 +131,7 @@ ala' _ hof f = coerce #. hof (coerce f)
 -- >>> under Product (stimes 3) (3 :: Int) :: Int
 -- 27
 under :: (Coercible a b, Coercible a' b')
-      => (a -> b)
+      => p a b
       -> (b -> b')
       -> a
       -> a'
@@ -145,7 +145,7 @@ under _ f = coerce f
 -- >>> over All not (All False) :: All
 -- All {getAll = True}
 over :: (Coercible a b, Coercible a' b')
-     => (a -> b)
+     => p a b
      -> (a -> a')
      -> b
      -> b'
@@ -157,7 +157,7 @@ over _ f = coerce f
 -- >>> under2 Any (<>) True False :: Bool
 -- True
 under2 :: (Coercible a b, Coercible a' b')
-       => (a -> b)
+       => p a b
        -> (b -> b -> b')
        -> a
        -> a
@@ -167,7 +167,7 @@ under2 _ f = coerce f
 
 -- | The opposite of 'under2'.
 over2 :: (Coercible a b, Coercible a' b')
-      => (a -> b)
+      => p a b
       -> (a -> a -> a')
       -> b
       -> b
@@ -177,7 +177,7 @@ over2 _ f = coerce f
 
 -- | 'under' lifted into a 'Functor'.
 underF :: (Coercible a b, Coercible a' b', Functor f, Functor g)
-       => (a -> b)
+       => p a b
        -> (f b -> g b')
        -> f a
        -> g a'
@@ -186,7 +186,7 @@ underF _ f = fmap coerce . f . fmap coerce
 
 -- | 'over' lifted into a 'Functor'.
 overF :: (Coercible a b, Coercible a' b', Functor f, Functor g)
-      => (a -> b)
+      => p a b
       -> (f a -> g a')
       -> f b
       -> g b'
