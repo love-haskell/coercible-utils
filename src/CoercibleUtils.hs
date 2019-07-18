@@ -72,7 +72,7 @@ infixr 9 .#
 -- >>> op (Identity . Sum) (Identity (Sum 3))
 -- 3
 op :: Coercible a b
-   => p a b
+   => (a -> b)
    -> b
    -> a
 op = coerce
