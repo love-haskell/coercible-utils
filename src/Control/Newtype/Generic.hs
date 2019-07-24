@@ -178,16 +178,12 @@ over _ f = pack #. f .# coerce
 --
 -- >>> under2 Any (<>) True False
 -- True
---
--- @since 0.5.2
 under2 :: (Coercible n o, Newtype n' o')
        => (o `to` n) -> (n -> n -> n') -> (o -> o -> o')
 --under2 _ f o0 o1 = unpack $ f (coerce o0) (coerce o1)
 under2 _ = coerce
 
 -- | The opposite of 'under2'.
---
--- @since 0.5.2
 over2 :: (Coercible n o, Newtype n' o')
        => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
 --over2 _ f n0 n1 = pack $ f (coerce n0) (coerce n1)
