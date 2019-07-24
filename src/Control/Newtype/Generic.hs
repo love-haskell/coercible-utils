@@ -102,13 +102,9 @@ class (Coercible n o, O n ~ o) => Newtype n o
 -- also a good one.
 instance (Generic n, Coercible n o, O n ~ o) => Newtype n o
 
--- Compat shim for GHC 7.8
+-- Compat shim for GHC up to 8.2, which are lousy at symmetry
 coerce' :: Coercible a b => b -> a
-#if __GLASGOW_HASKELL__ >= 710
 coerce' = coerce
-#else
-coerce' = coerce (\x -> x :: a) :: forall a b. Coercible a b => b -> a
-#endif
 
 -- | Wrap a value with a newtype constructor.
 pack :: Newtype n o => o -> n
@@ -193,10 +189,21 @@ over2 _ = coerce'
 underF :: (Coercible (f o) (f n), Coercible (g n') (g o'), Newtype n' o')
        => (o `to` n) -> (f n -> g n') -> (f o -> g o')
 -- The exact order of arguments to the Coercible constraints is important for GHC
--- up to at least 8.2 for some reason. 8.6 doesn't seem to care.
+-- up to 8.2 for some reason. 8.4 and later seem to be much more relaxed.
+#if __GLASGOW_HASKELL__ >= 800
+-- Yes, GHC 8.0 and 8.2 need these to be coerce and not coerce', while GHC 7.10
+-- need them to be coerce' and not coerce. Don't ask me.
 underF _ f = coerce #. f .# coerce
+#else
+-- 7.10 is fussy. Whatever..
+underF _ f = coerce' . f . coerce'
+#endif
 
 -- | 'over' lifted into a functor.
 overF :: (Coercible (f n) (f o), Coercible (g o') (g n'), Newtype n' o')
       => (o `to` n) -> (f o -> g o') -> (f n -> g n')
+#if __GLASGOW_HASKELL__ >= 800
 overF _ f = coerce #. f .# coerce
+#else
+overF _ f = coerce' . f . coerce'
+#endif
