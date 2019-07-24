@@ -20,7 +20,7 @@ All {getAll = True}
 
 __Note__: All of the functions in this module take an argument that solely
 directs the /type/ of the coercion. The value of this argument is /ignored/.
-In each case, this argument has a type that looks like @a `to` b@. As the name
+In each case, this argument has a type that looks like @a \`to\` b@. As the name
 of the @to@ type variable suggests, this will typically be a function from
 @a@ to @b@. But leaving the type variable completely polymorphic and
 unconstrained lets the type signature communicate the fact that the argument
