@@ -7,6 +7,8 @@
 {-# language TypeOperators              #-}
 {-# language DataKinds                  #-}
 {-# language UndecidableInstances       #-}
+{-# language ConstraintKinds            #-}
+{-# language PolyKinds                  #-}
 
 {- |
 A version of the 'Newtype' typeclass and related functions.
@@ -24,10 +26,9 @@ Primarily pulled from Conor McBride's Epigram work. Some examples:
 >>> over All not (All False)
 All {getAll = True)
 
-The version of the 'Newtype' class exported by this module has only
-one instance, which cannot be overridden. It has instances for
+The version of the 'Newtype' class exported by this module has an instance for
 *all* and *only* newtypes with 'Generic' instances whose generated
-'Coercible' instances are visible. Users need not, and cannot, write
+'Coercible' instances are visible. Users need not, and probably should not, write
 their own instances.
 
 Like McBride's version, and unlike the one in @newtype-generics@,
@@ -37,10 +38,10 @@ and easier to read.
 
 Unlike the versions in "CoercibleUtils", one of the "packers" must
 operate on only one newtype layer at a time; this improves inference at
-the expense of some flexibility.
+the expense of a little flexibility.
 
 Note: Each function in this module takes an argument representing a
-newtype constructor. This is used only for its type. To make that clear,
+newtype constructor (or similar). This is used only for its type. To make that clear,
 the type of that argument is allowed to be extremely polymorphic: @o \`to\` n@
 rather than @o -> n@.
 
@@ -51,6 +52,7 @@ module Control.Newtype.Generic
   , IsNewtype
   , HasUnderlying
   , O
+  , Similar
   , pack
   , unpack
   , op
@@ -70,6 +72,11 @@ import Data.Coerce
 import GHC.TypeLits (TypeError, ErrorMessage (..))
 #endif
 import CoercibleUtils (op, (#.), (.#))
+#if MIN_VERSION_base(4,9,0)
+import Data.Kind (Constraint)
+#else
+import GHC.Exts (Constraint)
+#endif
 
 -- | Get the underlying type of a newtype.
 --
@@ -96,7 +103,7 @@ type family GO x rep where
 -- means the newtype constructor is visible, but the instance
 -- could also have been brought into view by pattern matching
 -- on a 'Data.Type.Coercion.Coercion'.
-class (Coercible n o, O n ~ o) => Newtype n o
+class Coercible n o => Newtype (n :: k) (o :: k)
 
 -- The Generic n constraint gives a much better type error if
 -- n is not an instance of Generic. Without that, there's
@@ -114,6 +121,29 @@ instance Newtype n (O n) => IsNewtype n
 -- partial application.
 class Newtype n o => HasUnderlying o n
 instance Newtype n o => HasUnderlying o n
+
+-- | Two types are @Similar@ if they are built from
+-- the same type constructor and the same kind arguments.
+--
+-- @Sum Int@ and @Sum Bool@ are @Similar@.
+--
+-- @Sum Int@ and @Product Int@ are not @Similar@
+-- because they are built from different type constructors.
+--
+-- @Const Int Char@ and @Const Int Maybe@ are not @Similar@
+-- because they have different kind arguments.
+class Similar (n :: k) (n' :: k)
+instance (Sim n n', Sim n' n) => Similar n n'
+
+type family GetArg (x :: j) :: k where
+  GetArg (_ a) = a
+
+type family GetFun (x :: j) :: k where
+  GetFun (f _) = f
+
+type family Sim (n :: k) (n' :: k) :: Constraint where
+  Sim (f (a :: j)) n' = (Sim f (GetFun n'), n' ~ GetFun n' (GetArg n' :: j))
+  Sim f g = f ~ g
 
 -- Compat shim for GHC up to 8.2, which are lousy at symmetry
 coerce' :: Coercible a b => b -> a
@@ -144,7 +174,7 @@ unpack = coerce
 --
 -- >>> ala Sum foldMap [1,2,3,4]
 -- 10
-ala :: (Coercible n o, Newtype n' o')
+ala :: (Coercible n o, Newtype n' o', Similar n n')
     => (o `to` n) -> ((o -> n) -> b -> n') -> (b -> o')
 ala pa hof = ala' pa hof id
 
@@ -161,7 +191,7 @@ ala pa hof = ala' pa hof id
 --
 -- >>> ala' First foldMap (readMaybe @Int) ["x", "42", "1"]
 -- Just 42
-ala' :: (Coercible n o, Newtype n' o')
+ala' :: (Coercible n o, Newtype n' o', Similar n n')
      => (o `to` n) -> ((a -> n) -> b -> n') -> (a -> o) -> (b -> o')
 --ala' _ hof f = unpack . hof (coerce . f)
 ala' _ = coerce
@@ -170,7 +200,7 @@ ala' _ = coerce
 --
 -- >>> under Product (stimes 3) 3
 -- 27
-under :: (Coercible n o, Newtype n' o')
+under :: (Coercible n o, Newtype n' o', Similar n n')
       => (o `to` n) -> (n -> n') -> (o -> o')
 under _ f = unpack #. f .# coerce
 
@@ -179,7 +209,7 @@ under _ f = unpack #. f .# coerce
 --
 -- >>> over All not (All False)
 -- All {getAll = True}
-over :: (Coercible n o,  Newtype n' o')
+over :: (Coercible n o,  Newtype n' o', Similar n n')
      => (o `to` n) -> (o -> o') -> (n -> n')
 over _ f = pack #. f .# coerce
 
@@ -187,19 +217,19 @@ over _ f = pack #. f .# coerce
 --
 -- >>> under2 Any (<>) True False
 -- True
-under2 :: (Coercible n o, Newtype n' o')
+under2 :: (Coercible n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (n -> n -> n') -> (o -> o -> o')
 --under2 _ f o0 o1 = unpack $ f (coerce o0) (coerce o1)
 under2 _ = coerce
 
 -- | The opposite of 'under2'.
-over2 :: (Coercible n o, Newtype n' o')
+over2 :: (Coercible n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
 --over2 _ f n0 n1 = pack $ f (coerce n0) (coerce n1)
 over2 _ = coerce'
 
 -- | 'under' lifted into a functor.
-underF :: (Coercible (f o) (f n), Coercible (g n') (g o'), Newtype n' o')
+underF :: (Coercible (f o) (f n), Coercible (g n') (g o'), Newtype n' o', Similar n n')
        => (o `to` n) -> (f n -> g n') -> (f o -> g o')
 -- The exact order of arguments to the Coercible constraints is important for GHC
 -- up to 8.2 for some reason. 8.4 and later seem to be much more relaxed.
@@ -213,7 +243,7 @@ underF _ f = coerce' . f . coerce'
 #endif
 
 -- | 'over' lifted into a functor.
-overF :: (Coercible (f n) (f o), Coercible (g o') (g n'), Newtype n' o')
+overF :: (Coercible (f n) (f o), Coercible (g o') (g n'), Newtype n' o', Similar n n')
       => (o `to` n) -> (f o -> g o') -> (f n -> g n')
 #if __GLASGOW_HASKELL__ >= 800
 overF _ f = coerce #. f .# coerce
