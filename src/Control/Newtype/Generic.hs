@@ -1,4 +1,5 @@
 {-# language CPP                        #-}
+{-# language FlexibleContexts           #-}
 {-# language FlexibleInstances          #-}
 {-# language MultiParamTypeClasses      #-}
 {-# language ScopedTypeVariables        #-}
@@ -47,6 +48,8 @@ rather than @o -> n@.
 -}
 module Control.Newtype.Generic
   ( Newtype
+  , IsNewtype
+  , HasUnderlying
   , O
   , pack
   , unpack
@@ -101,6 +104,16 @@ class (Coercible n o, O n ~ o) => Newtype n o
 -- lousy error message still shows up, but at least there's
 -- also a good one.
 instance (Generic n, Coercible n o, O n ~ o) => Newtype n o
+
+-- | A single-parameter version of 'Newtype', similar to the
+-- @Newtype@ class in @newtype-generics@.
+class Newtype n (O n) => IsNewtype n
+instance Newtype n (O n) => IsNewtype n
+
+-- | A version of 'Newtype' with the parameters flipped, for
+-- partial application.
+class Newtype n o => HasUnderlying o n
+instance Newtype n o => HasUnderlying o n
 
 -- Compat shim for GHC up to 8.2, which are lousy at symmetry
 coerce' :: Coercible a b => b -> a
