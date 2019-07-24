@@ -48,6 +48,8 @@ rather than @o -> n@.
 module Control.Newtype.Generic
   ( Newtype
   , O
+  , pack
+  , unpack
   , op
   , ala
   , ala'
@@ -64,7 +66,7 @@ import Data.Coerce
 #if MIN_VERSION_base(4,9,0)
 import GHC.TypeLits (TypeError, ErrorMessage (..))
 #endif
-import CoercibleUtils (op)
+import CoercibleUtils (op, (#.), (.#))
 
 -- | Get the underlying type of a newtype.
 --
@@ -116,6 +118,7 @@ pack = coerce'
 unpack :: Newtype n o => n -> o
 unpack = coerce
 
+
 -- | The workhorse of the package. Given a "packer" and a \"higher order function\" (/hof/),
 -- it handles the packing and unpacking, and just sends you back a regular old
 -- function, with the type varying based on the /hof/ you passed.
@@ -151,7 +154,7 @@ ala pa hof = ala' pa hof id
 -- Just 42
 ala' :: (Coercible n o, Newtype n' o')
      => (o `to` n) -> ((a -> n) -> b -> n') -> (a -> o) -> (b -> o')
---ala' _ hof f = unpack . hof (pack . f)
+--ala' _ hof f = unpack . hof (coerce . f)
 ala' _ = coerce
 
 -- | A very simple operation involving running the function \'under\' the newtype.
@@ -160,8 +163,7 @@ ala' _ = coerce
 -- 27
 under :: (Coercible n o, Newtype n' o')
       => (o `to` n) -> (n -> n') -> (o -> o')
---under _ f = unpack . f . pack
-under _ = coerce
+under _ f = unpack #. f .# coerce
 
 -- | The opposite of 'under'. I.e., take a function which works on the
 -- underlying types, and switch it to a function that works on the newtypes.
@@ -170,8 +172,7 @@ under _ = coerce
 -- All {getAll = True}
 over :: (Coercible n o,  Newtype n' o')
      => (o `to` n) -> (o -> o') -> (n -> n')
---over _ f = pack . f . unpack
-over _ = coerce'
+over _ f = pack #. f .# coerce
 
 -- | Lower a binary function to operate on the underlying values.
 --
@@ -181,7 +182,7 @@ over _ = coerce'
 -- @since 0.5.2
 under2 :: (Coercible n o, Newtype n' o')
        => (o `to` n) -> (n -> n -> n') -> (o -> o -> o')
---under2 _ f o0 o1 = unpack $ f (pack o0) (pack o1)
+--under2 _ f o0 o1 = unpack $ f (coerce o0) (coerce o1)
 under2 _ = coerce
 
 -- | The opposite of 'under2'.
@@ -189,15 +190,17 @@ under2 _ = coerce
 -- @since 0.5.2
 over2 :: (Coercible n o, Newtype n' o')
        => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
---over2 _ f n0 n1 = pack $ f (unpack n0) (unpack n1)
+--over2 _ f n0 n1 = pack $ f (coerce n0) (coerce n1)
 over2 _ = coerce'
 
--- | 'under' lifted into a Functor.
-underF :: (Coercible n o, Newtype n' o', Functor f, Functor g)
+-- | 'under' lifted into a functor.
+underF :: (Coercible (f o) (f n), Coercible (g n') (g o'), Newtype n' o')
        => (o `to` n) -> (f n -> g n') -> (f o -> g o')
-underF _ f = fmap unpack . f . fmap coerce
+-- The exact order of arguments to the Coercible constraints is important for GHC
+-- up to at least 8.2 for some reason. 8.6 doesn't seem to care.
+underF _ f = coerce #. f .# coerce
 
--- | 'over' lifted into a Functor.
-overF :: (Coercible n o, Newtype n' o', Functor f, Functor g)
+-- | 'over' lifted into a functor.
+overF :: (Coercible (f n) (f o), Coercible (g o') (g n'), Newtype n' o')
       => (o `to` n) -> (f o -> g o') -> (f n -> g n')
-overF _ f = fmap pack . f . fmap coerce
+overF _ f = coerce #. f .# coerce
