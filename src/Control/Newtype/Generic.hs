@@ -1,4 +1,3 @@
-{-# language CPP                        #-}
 {-# language FlexibleContexts           #-}
 {-# language FlexibleInstances          #-}
 {-# language MultiParamTypeClasses      #-}
@@ -68,15 +67,9 @@ module Control.Newtype.Generic
 
 import GHC.Generics
 import Data.Coerce
-#if MIN_VERSION_base(4,9,0)
 import GHC.TypeLits (TypeError, ErrorMessage (..))
-#endif
 import CoercibleUtils (op, (#.), (.#))
-#if MIN_VERSION_base(4,9,0)
 import Data.Kind (Constraint)
-#else
-import GHC.Exts (Constraint)
-#endif
 
 -- | Get the underlying type of a newtype.
 --
@@ -87,15 +80,11 @@ import GHC.Exts (Constraint)
 type O x = GO x (Rep x)
 
 type family GO x rep where
-#if __GLASGOW_HASKELL__ >= 800
   GO _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) = a
   GO x _rep = TypeError
     ('Text "There is no " ':<>: 'ShowType Newtype ':<>: 'Text " instance for"
       ':$$: 'Text "    " ':<>: 'ShowType x
       ':$$: 'Text "because it is not a newtype.")
-#else
-  GO _x (D1 _d (C1 _c (S1 _s (K1 _i a)))) = a
-#endif
 
 -- | @Newtype n o@ means that @n@ is a newtype wrapper around
 -- @o@. @n@ must be an instance of 'Generic'. Furthermore, the
@@ -142,16 +131,12 @@ type family GetFun (x :: j) :: k where
   GetFun (f _) = f
 
 type family Sim (n :: k) (n' :: k) :: Constraint where
-  Sim (f (a :: j)) n' = (Sim f (GetFun n'), n' ~ GetFun n' (GetArg n' :: j))
+  Sim (f (_ :: j)) n' = (Sim f (GetFun n'), n' ~ GetFun n' (GetArg n' :: j))
   Sim f g = f ~ g
-
--- Compat shim for GHC up to 8.2, which are lousy at symmetry
-coerce' :: Coercible a b => b -> a
-coerce' = coerce
 
 -- | Wrap a value with a newtype constructor.
 pack :: Newtype n o => o -> n
-pack = coerce'
+pack = coerce
 
 -- | Unwrap a newtype constructor from a value.
 unpack :: Newtype n o => n -> o
@@ -226,27 +211,14 @@ under2 _ = coerce
 over2 :: (Coercible n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
 --over2 _ f n0 n1 = pack $ f (coerce n0) (coerce n1)
-over2 _ = coerce'
+over2 _ = coerce
 
 -- | 'under' lifted into a functor.
 underF :: (Coercible (f o) (f n), Coercible (g n') (g o'), Newtype n' o', Similar n n')
        => (o `to` n) -> (f n -> g n') -> (f o -> g o')
--- The exact order of arguments to the Coercible constraints is important for GHC
--- up to 8.2 for some reason. 8.4 and later seem to be much more relaxed.
-#if __GLASGOW_HASKELL__ >= 800
--- Yes, GHC 8.0 and 8.2 need these to be coerce and not coerce', while GHC 7.10
--- need them to be coerce' and not coerce. Don't ask me.
 underF _ f = coerce #. f .# coerce
-#else
--- 7.10 is fussy. Whatever..
-underF _ f = coerce' . f . coerce'
-#endif
 
 -- | 'over' lifted into a functor.
 overF :: (Coercible (f n) (f o), Coercible (g o') (g n'), Newtype n' o', Similar n n')
       => (o `to` n) -> (f o -> g o') -> (f n -> g n')
-#if __GLASGOW_HASKELL__ >= 800
 overF _ f = coerce #. f .# coerce
-#else
-overF _ f = coerce' . f . coerce'
-#endif
