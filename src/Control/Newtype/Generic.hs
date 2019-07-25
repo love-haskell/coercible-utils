@@ -81,7 +81,12 @@ type O x = GO x (Rep x)
 
 type family GO x rep where
   GO _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) = a
-  GO x _rep = TypeError
+
+type NewtypeF x o = GNewtypeF x (Rep x) o
+
+type family GNewtypeF x rep o :: Constraint where
+  GNewtypeF x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) o = a ~ o
+  GNewtypeF x _rep _o = TypeError
     ('Text "There is no " ':<>: 'ShowType Newtype ':<>: 'Text " instance for"
       ':$$: 'Text "    " ':<>: 'ShowType x
       ':$$: 'Text "because it is not a newtype.")
@@ -99,7 +104,7 @@ class Coercible n o => Newtype (n :: k) (o :: k)
 -- just a mysterious message involving GO and Rep. With it, the
 -- lousy error message still shows up, but at least there's
 -- also a good one.
-instance (Generic n, Coercible n o, O n ~ o) => Newtype n o
+instance (Generic n, NewtypeF n o, Coercible n o) => Newtype n o
 
 -- | A single-parameter version of 'Newtype', similar to the
 -- @Newtype@ class in @newtype-generics@.
@@ -122,7 +127,7 @@ instance Newtype n o => HasUnderlying o n
 -- @Const Int Char@ and @Const Int Maybe@ are not @Similar@
 -- because they have different kind arguments.
 class Similar (n :: k) (n' :: k)
-instance (Sim n n', Sim n' n) => Similar n n'
+instance (Similar' n n', Similar' n' n) => Similar n n'
 
 type family GetArg (x :: j) :: k where
   GetArg (_ a) = a
@@ -130,9 +135,11 @@ type family GetArg (x :: j) :: k where
 type family GetFun (x :: j) :: k where
   GetFun (f _) = f
 
-type family Sim (n :: k) (n' :: k) :: Constraint where
-  Sim (f (_ :: j)) n' = (Sim f (GetFun n'), n' ~ GetFun n' (GetArg n' :: j))
-  Sim f g = f ~ g
+type family Similar' (n :: k) (n' :: k) :: Constraint where
+  Similar' (f (_ :: j)) n' =
+    ( Similar' f (GetFun n')
+    , n' ~ GetFun n' (GetArg n' :: j))
+  Similar' f g = f ~ g
 
 -- | Wrap a value with a newtype constructor.
 pack :: Newtype n o => o -> n
