@@ -83,15 +83,22 @@ import Data.Kind (Constraint)
 -- data N = N Int deriving Generic
 -- -- O N = Int
 -- @
-type O x = GO x (Rep x)
+type O x = GO (Rep x)
 
-type family GO x rep where
-  GO _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) = a
+-- | Get the underlying type of a newtype from its generic
+-- representation.
+type family GO rep where
+  GO (D1 _d (C1 _c (S1 _s (K1 _i a)))) = a
 
+-- | Given types @x@ and @o@, produce a constraint requiring that @x@ be a
+-- newtype whose underlying type is @o@.
 type NewtypeF x o = GNewtypeF x (Rep x) o
 
+-- | Putting a newtype check and 'TypeError' call in 'GO' and then requiring @o
+-- ~ O n@ doesn't get us a custom type error when we want one. Calculating the
+-- constraint with an error case, however, seems to do the trick.
 type family GNewtypeF x rep o :: Constraint where
-  GNewtypeF x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) o = a ~ o
+  GNewtypeF _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) o = a ~ o
   GNewtypeF x _rep _o = TypeError
     ('Text "There is no " ':<>: 'ShowType Newtype ':<>: 'Text " instance for"
       ':$$: 'Text "    " ':<>: 'ShowType x
@@ -133,19 +140,86 @@ instance Newtype n o => HasUnderlying o n
 -- @Const Int Char@ and @Const Int Maybe@ are not @Similar@
 -- because they have different kind arguments.
 class Similar (n :: k) (n' :: k)
+-- See [Note: Similar implementation]
+
 instance (Similar' n n', Similar' n' n) => Similar n n'
 
-type family GetArg (x :: j) :: k where
-  GetArg (_ a) = a
+-- | Given a type of the form (f b), try to extract b, assuming that b is of
+-- kind kb. Note that kb itself is an implicit argument to GetArg; the
+-- surrounding context of the call must determine kb.
+type family GetArg (x :: kx) :: kb where
+  GetArg (_ b) = b
 
-type family GetFun (x :: j) :: k where
+-- | Given a type of the form (f b), try to extract f, assuming that f is of
+-- kind kf. Note that kf itself is an implicit argument to GetFun; the
+-- surrounding context of the call must determine kf.
+type family GetFun (x :: kx) :: kf where
   GetFun (f _) = f
 
+-- | Given types @n@ and @n'@, produce a constraint requiring that @n'@ be
+-- built from the same newtype constructor as @n@. See [Note: Similar
+-- implementation].
 type family Similar' (n :: k) (n' :: k) :: Constraint where
-  Similar' (f (_ :: j)) n' =
+  Similar' (f (_a :: ka)) n' =
     ( Similar' f (GetFun n')
-    , n' ~ GetFun n' (GetArg n' :: j))
+    , n' ~ GetFun n' (GetArg n' :: ka))
   Similar' f g = f ~ g
+
+{-
+[Note: Similar implementation]
+
+The Similar class is what really separates this implementation of this API from
+all previous ones of which I am aware. Since it's not the simplest thing, I'll
+give an extended description of the implementation here.
+
+We really want n to give us information about n'. It's also nice (for typed
+holes and error messages, particularly) if n' gives us information about n.
+Since we may know nothing, a priori, about one of those, we have to be a bit
+careful not to force a match on one when the other is the one with information.
+The horrible way to do that (even worse :t results!) is with INCOHERENT
+typeclass instances. Ignoring that awfulness, the thing to do is to require n'
+to have a structure calculated from n and the other way around, "in parallel".
+Similar' n n' matches on n, producing a constraint. Suppose we have n ~ F a b.
+Then we get
+
+   Similar' (F a b) n'
+   (Similar' (F a) (GetFun n'), n' ~ GetFun n' (GetArg n'))
+
+We have now constrained things only a little: n' is required to have the form p
+q for some p and q, where F a and p have the same kind and b and q have the
+same kind. Substituting in p and q, we continue:
+
+   (Similar' (F a) p, n' ~ p q)
+   ((Similar' F (GetFun p), p ~ GetFun p (GetArg p)), n' ~ p q)
+
+Let's set r ~ GetFun p and s ~ GetArg p. Then
+
+   ((Similar' F r, p ~ r s), n' ~ p q)
+
+We've now reached the base case! Yay! So the last step is
+
+   ((F ~ r, p ~ r s), n' ~ p q)
+
+which then simplifies to
+
+   n' ~ F s q
+
+Undoing the substitutions we made,
+
+   n' ~ F (GetArg (GetFun n')) (GetArg n')
+
+The arguments in that constraint are completely useless (as far as I know), but
+we need to put it all together like that to get what we're after: an equality
+constraint on n' itself that lets GHC know it's F x y for some x and y to be
+determined. Very often, those are then fixed by the type o' and the Newtype n'
+o' constraint, which at first seems backwards. Say we consider Sum. We have
+
+   type Rep (Sum a) = M1 _ _ (M1 _ _ (M1 _ _ (K1 _ a)))
+
+This can reduce as soon as GHC sees we have Sum whatever! So then the
+NewtypeF-calculated constraint can constrain the type argument to whatever's
+required to wrap the new contents. Magic!
+-}
 
 -- | Wrap a value with a newtype constructor.
 pack :: Newtype n o => o -> n
