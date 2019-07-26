@@ -35,14 +35,20 @@ this version has two parameters: one for the newtype and one for the
 underlying type. This generally makes 'Newtype' constraints more compact
 and easier to read.
 
-Unlike the versions in "CoercibleUtils", one of the "packers" must
-operate on only one newtype layer at a time; this improves inference at
-the expense of a little flexibility.
-
 Note: Each function in this module takes an argument representing a
 newtype constructor (or similar). This is used only for its type. To make that clear,
 the type of that argument is allowed to be extremely polymorphic: @o \`to\` n@
 rather than @o -> n@.
+
+General approach: When the type variables @n@ and @o@ appear, @n@ is /typically/
+expected to be a newtype wrapper around @o@. However, if the function takes a
+value of type @n \`to\` o@, then @n@ can be any @Generic@ newtype and @o@ can be
+any type coercible with it. It's not clear whether this extra generality over
+the @newtype@ package is useful or not, but it shouldn't harm inference
+significantly. When the type variables @n'@ and @o'@ appear as well, @n'@ is
+/required/ to be a newtype wrapper around @o'@, and, furthermore, @n@ and
+@n'@ are required to be the /same newtype/, with possibly different type
+arguments. See 'Similar' for detailed documentation.
 
 @since TODO
 -}
