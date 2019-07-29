@@ -19,7 +19,8 @@ tested-with:         GHC == 8.4.3
 library
   hs-source-dirs:      src
   exposed-modules:     CoercibleUtils
-                     , Control.Newtype.Generic
+                     , CoercibleUtils.Compose
+                     , CoercibleUtils.Newtype
                        
   ghc-options:         -Wall
   build-depends:       base >= 4.11 && < 4.13
