@@ -1,4 +1,3 @@
-{-# language CPP                        #-}
 {-# language FlexibleContexts           #-}
 {-# language FlexibleInstances          #-}
 {-# language MultiParamTypeClasses      #-}
@@ -7,10 +6,14 @@
 {-# language TypeOperators              #-}
 {-# language DataKinds                  #-}
 {-# language UndecidableInstances       #-}
+{-# language ConstraintKinds            #-}
+{-# language PolyKinds                  #-}
 
 {- |
-A version of the 'Newtype' typeclass and related functions.
-Primarily pulled from Conor McBride's Epigram work. Some examples:
+A version of the 'Newtype' typeclass and related functions.  The API is
+primarily pulled from Conor McBride's Epigram work. The general idea is that we
+can manipulate types in terms of newtypes around them or newtypes in terms of
+their underlying types. Some examples:
 
 >>> ala Sum foldMap [1,2,3,4]
 10
@@ -24,25 +27,27 @@ Primarily pulled from Conor McBride's Epigram work. Some examples:
 >>> over All not (All False)
 All {getAll = True)
 
-The version of the 'Newtype' class exported by this module has only
-one instance, which cannot be overridden. It has instances for
+The version of the 'Newtype' class exported by this module has an instance for
 *all* and *only* newtypes with 'Generic' instances whose generated
-'Coercible' instances are visible. Users need not, and cannot, write
+'Coercible' instances are visible. Users need not, and probably should not, write
 their own instances.
 
-Like McBride's version, and unlike the one in @newtype-generics@,
-this version has two parameters: one for the newtype and one for the
-underlying type. This generally makes 'Newtype' constraints more compact
-and easier to read.
+Like McBride's version, and unlike the one in @newtype-generics@, this version
+has two parameters: one for the newtype and one for the underlying type. This
+is mostly a matter of taste.
 
-Unlike the versions in "CoercibleUtils", one of the "packers" must
-operate on only one newtype layer at a time; this improves inference at
-the expense of some flexibility.
+Note: Each function in this module takes an argument representing a newtype
+constructor. This is used only for its type. To make that clear, the type of
+that argument is allowed to be extremely polymorphic: @o \`to\` n@ rather than
+@o -> n@. Unfortunately, GHCi displays this as @to o n@, which is ugly but
+equivalent.
 
-Note: Each function in this module takes an argument representing a
-newtype constructor. This is used only for its type. To make that clear,
-the type of that argument is allowed to be extremely polymorphic: @o \`to\` n@
-rather than @o -> n@.
+General approach: When the type variables @n@ and @o@ appear, @n@ is required
+to be a newtype wrapper around @o@. Similarly, when the type variables @n'@ and
+@o'@ appear as well, @n'@ is required to be a newtype wrapper around @o'@.
+Furthermore, in this case, @n@ and @n'@ are required to be the /same newtype/,
+with possibly different type arguments. See 'Similar' for detailed
+documentation.
 
 @since TODO
 -}
@@ -51,6 +56,7 @@ module Control.Newtype.Generic
   , IsNewtype
   , HasUnderlying
   , O
+  , Similar
   , pack
   , unpack
   , op
@@ -66,10 +72,9 @@ module Control.Newtype.Generic
 
 import GHC.Generics
 import Data.Coerce
-#if MIN_VERSION_base(4,9,0)
 import GHC.TypeLits (TypeError, ErrorMessage (..))
-#endif
 import CoercibleUtils (op, (#.), (.#))
+import Data.Kind (Constraint)
 
 -- | Get the underlying type of a newtype.
 --
@@ -77,51 +82,151 @@ import CoercibleUtils (op, (#.), (.#))
 -- data N = N Int deriving Generic
 -- -- O N = Int
 -- @
-type O x = GO x (Rep x)
+type O x = GO (Rep x)
 
-type family GO x rep where
-#if __GLASGOW_HASKELL__ >= 800
-  GO _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) = a
-  GO x _rep = TypeError
+-- | Get the underlying type of a newtype from its generic
+-- representation.
+type family GO rep where
+  GO (D1 _d (C1 _c (S1 _s (K1 _i a)))) = a
+
+-- | Given types @x@ and @o@, produce a constraint requiring that @x@ be a
+-- newtype whose underlying type is @o@.
+type NewtypeF x o = GNewtypeF x (Rep x) o
+
+-- | Putting a newtype check and 'TypeError' call in 'GO' and then requiring @o
+-- ~ O n@ doesn't get us a custom type error when we want one. Calculating the
+-- constraint with an error case, however, seems to do the trick.
+type family GNewtypeF x rep o :: Constraint where
+  GNewtypeF _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) o = a ~ o
+  GNewtypeF x _rep _o = TypeError
     ('Text "There is no " ':<>: 'ShowType Newtype ':<>: 'Text " instance for"
       ':$$: 'Text "    " ':<>: 'ShowType x
       ':$$: 'Text "because it is not a newtype.")
-#else
-  GO _x (D1 _d (C1 _c (S1 _s (K1 _i a)))) = a
-#endif
 
--- | @Newtype n o@ means that @n@ is a newtype wrapper around
--- @o@. @n@ must be an instance of 'Generic'. Furthermore, the
--- @'Coercible' n o@ instance must be visible; this typically
--- means the newtype constructor is visible, but the instance
--- could also have been brought into view by pattern matching
--- on a 'Data.Type.Coercion.Coercion'.
-class (Coercible n o, O n ~ o) => Newtype n o
+-- | @Newtype n o@ means that @n@ is a newtype wrapper around @o@. @n@ must be
+-- an instance of 'Generic'. Furthermore, the @'Coercible' n o@ instance must
+-- be visible; this typically means the newtype constructor is visible, but the
+-- instance could also have been brought into view by pattern matching on a
+-- 'Data.Type.Coercion.Coercion'.
+class Coercible n o => Newtype (n :: k) (o :: k)
 
--- The Generic n constraint gives a much better type error if
--- n is not an instance of Generic. Without that, there's
--- just a mysterious message involving GO and Rep. With it, the
--- lousy error message still shows up, but at least there's
--- also a good one.
-instance (Generic n, Coercible n o, O n ~ o) => Newtype n o
+-- The Generic n constraint gives a much better type error if n is not an
+-- instance of Generic. Without that, there's just a mysterious message
+-- involving GO and Rep. With it, the lousy error message still shows up, but
+-- at least there's also a good one.
+instance (Generic n, NewtypeF n o, Coercible n o) => Newtype n o
 
--- | A single-parameter version of 'Newtype', similar to the
--- @Newtype@ class in @newtype-generics@.
+-- | A single-parameter version of 'Newtype', similar to the @Newtype@ class in
+-- @newtype-generics@.
+--
+-- @Newtype n o@ is equivalent to @(IsNewtype n, o ~ O n)@.
 class Newtype n (O n) => IsNewtype n
 instance Newtype n (O n) => IsNewtype n
 
--- | A version of 'Newtype' with the parameters flipped, for
--- partial application.
+-- | A version of 'Newtype' with the parameters flipped, for partial
+-- application.
 class Newtype n o => HasUnderlying o n
 instance Newtype n o => HasUnderlying o n
 
--- Compat shim for GHC up to 8.2, which are lousy at symmetry
-coerce' :: Coercible a b => b -> a
-coerce' = coerce
+-- | Two types are @Similar@ if they are built from
+-- the same type constructor and the same kind arguments.
+--
+-- @Sum Int@ and @Sum Bool@ are @Similar@.
+--
+-- @Sum Int@ and @Product Int@ are not @Similar@
+-- because they are built from different type constructors.
+--
+-- @Const Int Char@ and @Const Int Maybe@ are not @Similar@
+-- because they have different kind arguments.
+class Similar (n :: k) (n' :: k)
+-- See [Note: Similar implementation]
+
+instance (Similar' n n', Similar' n' n) => Similar n n'
+
+-- | Given a type of the form (f b), try to extract b, assuming that b is of
+-- kind kb. Note that kb itself is an implicit argument to GetArg; the
+-- surrounding context of the call must determine kb.
+type family GetArg (x :: kx) :: kb where
+  GetArg (_ b) = b
+
+-- | Given a type of the form (f b), try to extract f, assuming that f is of
+-- kind kf. Note that kf itself is an implicit argument to GetFun; the
+-- surrounding context of the call must determine kf.
+type family GetFun (x :: kx) :: kf where
+  GetFun (f _) = f
+
+-- | Given types @n@ and @n'@, produce a constraint requiring that @n'@ be
+-- built from the same newtype constructor as @n@. See [Note: Similar
+-- implementation].
+type family Similar' (n :: k) (n' :: k) :: Constraint where
+  Similar' (f (_a :: ka)) n' =
+    ( Similar' f (GetFun n')
+    , n' ~ GetFun n' (GetArg n' :: ka))
+  Similar' f g = f ~ g
+-- We capture the kind of the argument as ka, and pass it to GetArg.
+-- The kind of the first call to GetFun is fixed by the kind of f,
+-- while the kind of the second is fixed by the kind of n' and the
+-- imposed kind, ka, of GetArg.
+
+{-
+[Note: Similar implementation]
+
+The Similar class is what really separates this implementation of this API from
+all previous ones of which I am aware. Since it's not the simplest thing, I'll
+give an extended description of the implementation here.
+
+We really want n to give us information about n'. It's also nice (for typed
+holes and error messages, particularly) if n' gives us information about n.
+Since we may know nothing, a priori, about one of those, we have to be a bit
+careful not to force a match on one when the other is the one with information.
+The horrible way to do that (even worse :t results!) is with INCOHERENT
+typeclass instances. Ignoring that awfulness, the thing to do is to require n'
+to have a structure calculated from n and the other way around, "in parallel".
+Similar' n n' matches on n, producing a constraint. Suppose we have n ~ F a b.
+Then we get
+
+   Similar' (F a b) n'
+   (Similar' (F a) (GetFun n'), n' ~ GetFun n' (GetArg n'))
+
+We have now constrained things only a little: n' is required to have the form p
+q for some p and q, where F a and p have the same kind and b and q have the
+same kind. Substituting in p and q, we continue:
+
+   (Similar' (F a) p, n' ~ p q)
+   ((Similar' F (GetFun p), p ~ GetFun p (GetArg p)), n' ~ p q)
+
+Let's set r ~ GetFun p and s ~ GetArg p. Then
+
+   ((Similar' F r, p ~ r s), n' ~ p q)
+
+We've now reached the base case! Yay! So the last step is
+
+   ((F ~ r, p ~ r s), n' ~ p q)
+
+which then simplifies to
+
+   n' ~ F s q
+
+Undoing the substitutions we made,
+
+   n' ~ F (GetArg (GetFun n')) (GetArg n')
+
+The arguments in that constraint are completely useless (as far as I know), but
+we need to put it all together like that to get what we're after: an equality
+constraint on n' itself that lets GHC know it's F x y for some x and y to be
+determined. Very often, those are then fixed by the type o' and the Newtype n'
+o' constraint, which at first seems backwards. Say we consider Sum. We have
+
+   type Rep (Sum a) = M1 _ _ (M1 _ _ (M1 _ _ (K1 _ a)))
+
+This can reduce as soon as GHC sees we have Sum whatever! So then the
+NewtypeF-calculated constraint can constrain the type argument to whatever's
+required to wrap the new contents. Magic!
+-}
 
 -- | Wrap a value with a newtype constructor.
 pack :: Newtype n o => o -> n
-pack = coerce'
+pack = coerce
 
 -- | Unwrap a newtype constructor from a value.
 unpack :: Newtype n o => n -> o
@@ -144,7 +249,7 @@ unpack = coerce
 --
 -- >>> ala Sum foldMap [1,2,3,4]
 -- 10
-ala :: (Coercible n o, Newtype n' o')
+ala :: (Newtype n o, Newtype n' o', Similar n n')
     => (o `to` n) -> ((o -> n) -> b -> n') -> (b -> o')
 ala pa hof = ala' pa hof id
 
@@ -161,7 +266,7 @@ ala pa hof = ala' pa hof id
 --
 -- >>> ala' First foldMap (readMaybe @Int) ["x", "42", "1"]
 -- Just 42
-ala' :: (Coercible n o, Newtype n' o')
+ala' :: (Newtype n o, Newtype n' o', Similar n n')
      => (o `to` n) -> ((a -> n) -> b -> n') -> (a -> o) -> (b -> o')
 --ala' _ hof f = unpack . hof (coerce . f)
 ala' _ = coerce
@@ -170,7 +275,7 @@ ala' _ = coerce
 --
 -- >>> under Product (stimes 3) 3
 -- 27
-under :: (Coercible n o, Newtype n' o')
+under :: (Newtype n o, Newtype n' o', Similar n n')
       => (o `to` n) -> (n -> n') -> (o -> o')
 under _ f = unpack #. f .# coerce
 
@@ -179,7 +284,7 @@ under _ f = unpack #. f .# coerce
 --
 -- >>> over All not (All False)
 -- All {getAll = True}
-over :: (Coercible n o,  Newtype n' o')
+over :: (Newtype n o,  Newtype n' o', Similar n n')
      => (o `to` n) -> (o -> o') -> (n -> n')
 over _ f = pack #. f .# coerce
 
@@ -187,36 +292,25 @@ over _ f = pack #. f .# coerce
 --
 -- >>> under2 Any (<>) True False
 -- True
-under2 :: (Coercible n o, Newtype n' o')
+under2 :: (Newtype n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (n -> n -> n') -> (o -> o -> o')
 --under2 _ f o0 o1 = unpack $ f (coerce o0) (coerce o1)
 under2 _ = coerce
 
 -- | The opposite of 'under2'.
-over2 :: (Coercible n o, Newtype n' o')
+over2 :: (Newtype n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
 --over2 _ f n0 n1 = pack $ f (coerce n0) (coerce n1)
-over2 _ = coerce'
+over2 _ = coerce
 
 -- | 'under' lifted into a functor.
-underF :: (Coercible (f o) (f n), Coercible (g n') (g o'), Newtype n' o')
+underF :: ( Newtype n o, Coercible (f o) (f n)
+          , Coercible (g n') (g o'), Newtype n' o', Similar n n')
        => (o `to` n) -> (f n -> g n') -> (f o -> g o')
--- The exact order of arguments to the Coercible constraints is important for GHC
--- up to 8.2 for some reason. 8.4 and later seem to be much more relaxed.
-#if __GLASGOW_HASKELL__ >= 800
--- Yes, GHC 8.0 and 8.2 need these to be coerce and not coerce', while GHC 7.10
--- need them to be coerce' and not coerce. Don't ask me.
 underF _ f = coerce #. f .# coerce
-#else
--- 7.10 is fussy. Whatever..
-underF _ f = coerce' . f . coerce'
-#endif
 
 -- | 'over' lifted into a functor.
-overF :: (Coercible (f n) (f o), Coercible (g o') (g n'), Newtype n' o')
+overF :: ( Newtype n o, Coercible (f n) (f o), Coercible (g o') (g n')
+         , Newtype n' o', Similar n n')
       => (o `to` n) -> (f o -> g o') -> (f n -> g n')
-#if __GLASGOW_HASKELL__ >= 800
 overF _ f = coerce #. f .# coerce
-#else
-overF _ f = coerce' . f . coerce'
-#endif
