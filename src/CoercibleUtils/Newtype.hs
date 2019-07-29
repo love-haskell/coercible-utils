@@ -36,7 +36,7 @@ Like McBride's version, and unlike the one in @newtype-generics@, this version
 has two parameters: one for the newtype and one for the underlying type. This
 is mostly a matter of taste.
 
-Note: Each function in this module takes an argument representing a newtype
+__Note__: Most functions in this module take an argument representing a newtype
 constructor. This is used only for its type. To make that clear, the type of
 that argument is allowed to be extremely polymorphic: @o \`to\` n@ rather than
 @o -> n@. Unfortunately, GHCi displays this as @to o n@, which is ugly but
@@ -51,7 +51,7 @@ documentation.
 
 @since TODO
 -}
-module Control.Newtype.Generic
+module CoercibleUtils.Newtype
   ( Newtype
   , IsNewtype
   , HasUnderlying
@@ -73,7 +73,7 @@ module Control.Newtype.Generic
 import GHC.Generics
 import Data.Coerce
 import GHC.TypeLits (TypeError, ErrorMessage (..))
-import CoercibleUtils (op, (#.), (.#))
+import CoercibleUtils.Compose ((#.), (.#))
 import Data.Kind (Constraint)
 
 -- | Get the underlying type of a newtype.
@@ -232,6 +232,18 @@ pack = coerce
 unpack :: Newtype n o => n -> o
 unpack = coerce
 
+-- | Reverse the type of a "packer".
+--
+-- >>> op All (All True)
+-- True
+-- >>> op (Identity . Sum) (Identity (Sum 3))
+-- 3
+op :: Coercible a b
+   => (a `to` b)
+   -> b
+   -> a
+op _ = coerce
+{-# INLINE op #-}
 
 -- | The workhorse of the package. Given a "packer" and a \"higher order function\" (/hof/),
 -- it handles the packing and unpacking, and just sends you back a regular old
