@@ -60,23 +60,29 @@ ala_test1c = ala
 ala_test1d :: (_ -> Sum Integer) -> (_ -> [Integer] -> _) -> [Integer] -> Word
 ala_test1d = ala
 
+under_test0a :: (_ -> All) -> _ -> _ -> _
+under_test0a = under
+
+under_test0b :: (_ -> _) -> (_ -> All) -> _ -> _
+under_test0b = under
+
+over_test0a :: (_ -> All) -> _ -> _ -> _
+over_test0a = over
+
+over_test0b :: (_ -> _) -> _ -> _ -> All
+over_test0b = over
+
 main :: IO ()
 main = do
-  print $ pack_test0 True
-  print $ pack_test1a 1
-  print $ pack_test1b 2
-  print $ unpack_test0 (All True)
-  print $ unpack_test1a (Sum 10)
-  print $ unpack_test1b (Sum 11)
-  print $ ala_test1a Sum (\f -> foldMap (fmap fromInteger . f)) [1..10]
-  print $ ala_test1b Sum (\f -> foldMap (fmap fromInteger . f)) [1..10]
-  print $ ala_test1c Sum (\f -> foldMap (fmap fromInteger . f)) [1..10]
-  print $ ala_test1d Sum (\f -> foldMap (fmap fromInteger . f)) [1..10]
-  print $ ala_test0a All id True
-  print $ ala_test0b All id True
+  print $ (pack True :: All)
+  print $ unpack (All True)
+  print $ ala Sum foldMap [1..10 :: Int]
+  print $ under Sum (fmap (+1)) (3 :: Int)
+  print $ over Sum (+3) (Sum (3 :: Int))
 
   -- Make sure the types are monomorphic. This is guaranteed by the
-  -- fact that the Typeable instances are resolved.
+  -- fact that the Typeable instances are resolved. Also make sure these
+  -- functions have the expected types!
   print $ typeOf pack_test0
   print $ typeOf pack_test1a
   print $ typeOf pack_test1b
@@ -90,3 +96,9 @@ main = do
   print $ typeOf ala_test1b
   print $ typeOf ala_test1c
   print $ typeOf ala_test1d
+
+  print $ typeOf under_test0a
+  print $ typeOf under_test0b
+
+  print $ typeOf over_test0a
+  print $ typeOf over_test0b
