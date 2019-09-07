@@ -1,6 +1,9 @@
 # Changelog
 `coercible-utils` uses [PVP Versioning][PVP].
 
+## [0.0.1] - 2019-09-07
+Make compatible with GHC 8.8.
+
 ## [0.0.0] – 2018-06-29
 Initial release.
 
