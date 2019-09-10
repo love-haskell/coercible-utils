@@ -254,7 +254,7 @@ op _ = coerce
 --
 -- > under2 :: (Newtype n o, Newtype n' o')
 -- >        => (o -> n) -> (n -> n -> n') -> (o -> o -> o')
--- > under2' pa f o0 o1 = ala pa (\p -> uncurry f . bimap p p) (o0, o1)
+-- > under2 pa f o0 o1 = ala pa (\p -> uncurry f . bimap p p) (o0, o1)
 --
 -- Being handed the "packer", the /hof/ may apply it in any structure of its choosing –
 -- in this case a tuple.
@@ -280,7 +280,7 @@ ala pa hof = ala' pa hof id
 -- Just 42
 ala' :: (Newtype n o, Newtype n' o', Similar n n')
      => (o `to` n) -> ((a -> n) -> b -> n') -> (a -> o) -> (b -> o')
---ala' _ hof f = unpack . hof (coerce . f)
+--ala' _ hof f = unpack . hof (pack . f)
 ala' _ = coerce
 
 -- | A very simple operation involving running the function \'under\' the newtype.
@@ -306,22 +306,22 @@ over _ f = pack #. f .# coerce
 -- True
 under2 :: (Newtype n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (n -> n -> n') -> (o -> o -> o')
---under2 _ f o0 o1 = unpack $ f (coerce o0) (coerce o1)
+--under2 _ f o0 o1 = unpack $ f (pack o0) (pack o1)
 under2 _ = coerce
 
 -- | The opposite of 'under2'.
 over2 :: (Newtype n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
---over2 _ f n0 n1 = pack $ f (coerce n0) (coerce n1)
+--over2 _ f n0 n1 = pack $ f (unpack n0) (unpack n1)
 over2 _ = coerce
 
--- | 'under' lifted into a functor.
+-- | 'under' lifted into functors
 underF :: ( Newtype n o, Coercible (f o) (f n)
           , Coercible (g n') (g o'), Newtype n' o', Similar n n')
        => (o `to` n) -> (f n -> g n') -> (f o -> g o')
 underF _ f = coerce #. f .# coerce
 
--- | 'over' lifted into a functor.
+-- | 'over' lifted into functors
 overF :: ( Newtype n o, Coercible (f n) (f o), Coercible (g o') (g n')
          , Newtype n' o', Similar n n')
       => (o `to` n) -> (f o -> g o') -> (f n -> g n')
