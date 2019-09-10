@@ -6,7 +6,7 @@ homepage:            https://github.com/sjakobi/coercible-utils
 bug-reports:         https://github.com/sjakobi/coercible-utils/issues
 license:             BSD3
 license-file:        LICENSE
-author:              Simon Jakobi, chessai
+author:              Simon Jakobi, chessai, David Feuer
 maintainer:          simon.jakobi@gmail.com
 copyright:           2018 Simon Jakobi, chessai
 category:            Control
