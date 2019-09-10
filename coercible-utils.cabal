@@ -1,12 +1,12 @@
 name:                coercible-utils
-version:             0.0.0
+version:             0.1.0
 description:         Utility functions for Coercible types.
 synopsis:            Utility functions for Coercible types
 homepage:            https://github.com/sjakobi/coercible-utils
 bug-reports:         https://github.com/sjakobi/coercible-utils/issues
 license:             BSD3
 license-file:        LICENSE
-author:              Simon Jakobi, chessai
+author:              Simon Jakobi, chessai, David Feuer
 maintainer:          simon.jakobi@gmail.com
 copyright:           2018 Simon Jakobi, chessai
 category:            Control
