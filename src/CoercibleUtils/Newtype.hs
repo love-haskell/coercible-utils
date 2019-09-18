@@ -1,6 +1,6 @@
 {-# language FlexibleContexts           #-}
 {-# language FlexibleInstances          #-}
-{-# language MultiParamTypeClasses      #-}
+{-# language FunctionalDependencies      #-}
 {-# language ScopedTypeVariables        #-}
 {-# language TypeFamilies               #-}
 {-# language TypeOperators              #-}
@@ -8,6 +8,7 @@
 {-# language UndecidableInstances       #-}
 {-# language ConstraintKinds            #-}
 {-# language PolyKinds                  #-}
+{-# language RankNTypes                 #-}
 
 {- |
 A version of the 'Newtype' typeclass and related functions.  The API is
@@ -28,7 +29,7 @@ their underlying types. Some examples:
 All {getAll = True)
 
 The version of the 'Newtype' class exported by this module has an instance for
-*all* and *only* newtypes with 'Generic' instances whose generated
+/all/ and /only/ newtypes with 'Generic' instances whose generated
 'Coercible' instances are visible. Users need not, and probably should not, write
 their own instances.
 
@@ -59,9 +60,11 @@ module CoercibleUtils.Newtype
   , Similar
   , pack
   , unpack
+  , upgrade
   , op
   , ala
   , ala'
+  , alap
   , under
   , over
   , under2
@@ -94,10 +97,10 @@ type family GO rep where
 type NewtypeF x o = GNewtypeF x (Rep x) o
 
 -- | Putting a newtype check and 'TypeError' call in 'GO' and then requiring @o
--- ~ O n@ doesn't get us a custom type error when we want one. Calculating the
+-- ~ O n@ doesn't get us a custom type error when we want one. Calculating a
 -- constraint with an error case, however, seems to do the trick.
 type family GNewtypeF x rep o :: Constraint where
-  GNewtypeF _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) o = a ~ o
+  GNewtypeF _x (D1 ('MetaData _n _m _p 'True) (C1 _c (S1 _s (K1 _i a)))) o = ()
   GNewtypeF x _rep _o = TypeError
     ('Text "There is no " ':<>: 'ShowType Newtype ':<>: 'Text " instance for"
       ':$$: 'Text "    " ':<>: 'ShowType x
@@ -108,13 +111,14 @@ type family GNewtypeF x rep o :: Constraint where
 -- be visible; this typically means the newtype constructor is visible, but the
 -- instance could also have been brought into view by pattern matching on a
 -- 'Data.Type.Coercion.Coercion'.
-class Coercible n o => Newtype (n :: k) (o :: k)
+class Coercible n o => Newtype n o | n -> o
+-- We need the fundep here to make things like `pack . pack` typecheck.
 
 -- The Generic n constraint gives a much better type error if n is not an
 -- instance of Generic. Without that, there's just a mysterious message
 -- involving GO and Rep. With it, the lousy error message still shows up, but
 -- at least there's also a good one.
-instance (Generic n, NewtypeF n o, Coercible n o) => Newtype n o
+instance (Generic n, NewtypeF n o, Coercible n o, O n ~ o) => Newtype n o
 
 -- | A single-parameter version of 'Newtype', similar to the @Newtype@ class in
 -- @newtype-generics@.
@@ -220,8 +224,8 @@ o' constraint, which at first seems backwards. Say we consider Sum. We have
    type Rep (Sum a) = M1 _ _ (M1 _ _ (M1 _ _ (K1 _ a)))
 
 This can reduce as soon as GHC sees we have Sum whatever! So then the
-NewtypeF-calculated constraint can constrain the type argument to whatever's
-required to wrap the new contents. Magic!
+Newtype constraint can constrain the type argument to whatever's required
+to wrap the new contents. Magic!
 -}
 
 -- | Wrap a value with a newtype constructor.
@@ -231,6 +235,18 @@ pack = coerce
 -- | Unwrap a newtype constructor from a value.
 unpack :: Newtype n o => n -> o
 unpack = coerce
+
+-- | Upgrade a monomorphic "packer" to a polymorphic unpacking function.
+--
+-- >>> upgrade All True
+-- All {getAll = True}
+--
+-- >>> upgrade (Sum :: Int -> Sum Int) (3 :: Integer)
+-- Sum {getSum = 3}
+upgrade :: (Newtype n o, Newtype n' o', Similar n n')
+        => (o `to` n) -> o' -> n'
+upgrade _ = pack
+{-# INLINE upgrade #-}
 
 -- | Reverse the type of a "packer".
 --
@@ -252,18 +268,41 @@ op _ = coerce
 -- The reason for the signature of the /hof/ is due to 'ala' not caring about structure.
 -- To illustrate why this is important, consider this alternative implementation of 'under2':
 --
--- > under2 :: (Newtype n o, Newtype n' o')
+-- > under2 :: (Newtype n o, Newtype n' o', Similar n n')
 -- >        => (o -> n) -> (n -> n -> n') -> (o -> o -> o')
 -- > under2 pa f o0 o1 = ala pa (\p -> uncurry f . bimap p p) (o0, o1)
 --
 -- Being handed the "packer", the /hof/ may apply it in any structure of its choosing –
 -- in this case a tuple.
 --
+-- @
+-- ala _ hof = unpack . hof pack
+-- @
+--
 -- >>> ala Sum foldMap [1,2,3,4]
 -- 10
 ala :: (Newtype n o, Newtype n' o', Similar n n')
     => (o `to` n) -> ((o -> n) -> b -> n') -> (b -> o')
 ala pa hof = ala' pa hof id
+
+-- | A version of 'ala' that passes a //polymorphic// packer to its argument.
+--
+-- @
+-- alap _ f = unpack . f pack
+-- @
+--
+-- This could be used, for example, to create a flexible version of 'under2':
+--
+-- @
+-- under2'
+--   :: ( Newtype n o, Newtype n' o', Newtype n'' o''
+--      , Similar n n', Similar n' n'', Similar n n'' )
+--   => (o -> n) -> (n -> n' -> n'') -> (o -> o' -> o'')
+-- under2' pa f o0 o1 = alap (upgrade pa) (\p -> uncurry f . bimap p p) (o0, o1)
+-- @
+alap :: Newtype n o
+    => (o `to` n) -> ((forall n' o'. (Newtype n' o', Similar n' n) => o' -> n') -> b -> n) -> (b -> o)
+alap _ f = unpack #. f pack
 
 -- | This is the original function seen in Conor McBride's work.
 -- The way it differs from the 'ala' function in this package,
@@ -278,44 +317,77 @@ ala pa hof = ala' pa hof id
 --
 -- >>> ala' First foldMap (readMaybe @Int) ["x", "42", "1"]
 -- Just 42
+--
+-- @
+-- ala' _ hof f = unpack . hof (pack . f)
+-- @
 ala' :: (Newtype n o, Newtype n' o', Similar n n')
      => (o `to` n) -> ((a -> n) -> b -> n') -> (a -> o) -> (b -> o')
---ala' _ hof f = unpack . hof (pack . f)
 ala' _ = coerce
 
 -- | A very simple operation involving running the function \'under\' the newtype.
+--
+-- @
+-- under _ f = unpack . f . pack
+-- @
 --
 -- >>> under Product (stimes 3) 3
 -- 27
 under :: (Newtype n o, Newtype n' o', Similar n n')
       => (o `to` n) -> (n -> n') -> (o -> o')
-under _ f = unpack #. f .# coerce
+under _ f = unpack #. f .# pack
 
--- | The opposite of 'under'. I.e., take a function which works on the
+-- | The opposite of 'under'. That is, take a function which works on the
 -- underlying types, and switch it to a function that works on the newtypes.
+--
+-- @
+-- over _ f = pack . f . unpack
+-- @
 --
 -- >>> over All not (All False)
 -- All {getAll = True}
 over :: (Newtype n o,  Newtype n' o', Similar n n')
      => (o `to` n) -> (o -> o') -> (n -> n')
-over _ f = pack #. f .# coerce
+over _ f = pack #. f .# unpack
 
 -- | Lower a binary function to operate on the underlying values.
+--
+-- @
+-- under2 _ f o0 o1 = unpack $ f (pack o0) (pack o1)
+-- @
 --
 -- >>> under2 Any (<>) True False
 -- True
 under2 :: (Newtype n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (n -> n -> n') -> (o -> o -> o')
---under2 _ f o0 o1 = unpack $ f (pack o0) (pack o1)
+
+-- Why do we require (n -> n -> n') rather than allowing (n -> n' -> n'') as in
+-- the 'alap' example?
+--
+-- Perhaps we should. The potential downside is that we can't write under2, per
+-- se, in terms of such a more flexible function because GHC doesn't understand
+-- that
+--
+-- forall n n'. Similar n n' => Similar n n
 under2 _ = coerce
 
 -- | The opposite of 'under2'.
+--
+-- @
+-- over2 _ f n0 n1 = pack $ f (unpack n0) (unpack n1)
+-- @
 over2 :: (Newtype n o, Newtype n' o', Similar n n')
        => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
---over2 _ f n0 n1 = pack $ f (unpack n0) (unpack n1)
 over2 _ = coerce
 
 -- | 'under' lifted into functors
+--
+-- @
+-- underF otn f = fmap (upgrade $ op otn) . f . fmap otn
+-- underF otn f = contramap (upgrade otn) . f . fmap otn
+-- underF otn f = contramap (upgrade otn) . f . contramap (upgrade $ op otn)
+-- underF otn f = fmap (upgrade $ op otn) . f . contramap (upgrade $ op otn)
+-- @
 underF :: ( Newtype n o, Coercible (f o) (f n)
           , Coercible (g n') (g o'), Newtype n' o', Similar n n')
        => (o `to` n) -> (f n -> g n') -> (f o -> g o')
