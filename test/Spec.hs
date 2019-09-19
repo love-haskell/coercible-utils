@@ -4,9 +4,17 @@
 -- signatures aren't sufficient, then we don't want them to have
 -- Typeable instances.
 {-# language NoMonomorphismRestriction #-}
+{-# language GADTs #-}
+{-# language ConstraintKinds #-}
 {-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
-module Main (main) where
+module Main
+  ( main
+  -- Exported to avoid unused warnings
+  , trans
+  , refl
+  , sym
+  ) where
 import Data.Monoid (Sum (..), All (..))
 import CoercibleUtils.Newtype
 import Type.Reflection
@@ -14,6 +22,22 @@ import Type.Reflection
 -- We don't want defaults making it look like things are working
 -- if they're not!
 default ()
+
+-- Copied from the constraints package
+data Dict c where
+  Dict :: c => Dict c
+
+trans :: (Similar a b, Similar b c) => proxy b -> Dict (Similar a c)
+trans _ = Dict
+
+-- We don't get unqualified reflexivity, but we get something really
+-- close: if a type is similar to *some* other type, then it's similar
+-- to itself.
+refl :: Similar a b => proxy b -> Dict (Similar a a)
+refl _ = Dict
+
+sym :: Similar a b => Dict (Similar b a)
+sym = Dict
 
 pack_test0 :: _ -> All
 pack_test0 = pack
