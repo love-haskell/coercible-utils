@@ -1,6 +1,23 @@
 # Changelog
 `coercible-utils` uses [PVP Versioning][PVP].
 
+## [0.2.0]
+
+* Install a missing fundep that prevented things like `pack . pack`
+  from typechecking.
+
+* Redesign the `Similar` class. Similarity is now transitive:
+
+  ```haskell
+  (Similar a b, Similar b c) => Similar a c
+  ```
+
+  It's also reflexive under a certain constraint:
+
+  ```haskell
+  Similar a b => (Similar a a, Similar b b)
+  ```
+
 ## [0.1.0] – 2019-09-07
 
 * Improve type inference via a new generic `Newtype` class. ([#14], [#16])
