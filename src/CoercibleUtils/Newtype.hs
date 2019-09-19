@@ -1,6 +1,6 @@
 {-# language FlexibleContexts           #-}
 {-# language FlexibleInstances          #-}
-{-# language FunctionalDependencies      #-}
+{-# language FunctionalDependencies     #-}
 {-# language ScopedTypeVariables        #-}
 {-# language TypeFamilies               #-}
 {-# language TypeOperators              #-}
@@ -9,6 +9,8 @@
 {-# language ConstraintKinds            #-}
 {-# language PolyKinds                  #-}
 {-# language RankNTypes                 #-}
+{-# language GADTs                      #-}
+{-# language UndecidableSuperClasses    #-}
 
 {- |
 A version of the 'Newtype' typeclass and related functions.  The API is
@@ -142,10 +144,28 @@ instance Newtype n o => HasUnderlying o n
 --
 -- @Const Int Char@ and @Const Int Maybe@ are not @Similar@
 -- because they have different kind arguments.
-class Similar (n :: k) (n' :: k)
--- See [Note: Similar implementation]
 
-instance (Similar' n n', Similar' n' n) => Similar n n'
+class (GetSkeleton n ~ GetSkeleton n', Rebuild (GetSkeleton n) n' ~ n', Rebuild (GetSkeleton n') n ~ n) => Similar n n'
+-- See [Note: Similar implementation]
+instance (GetSkeleton n ~ GetSkeleton n', Rebuild (GetSkeleton n) n' ~ n', Rebuild (GetSkeleton n') n ~ n) => Similar n n'
+
+data Skeleton k = End k | forall x. More (Skeleton (x -> k))
+type family GetSkeleton (t :: k) :: Skeleton k where
+  GetSkeleton (f a) = 'More (GetSkeleton f)
+  GetSkeleton a = 'End a
+
+-- | Given a skeleton `s` and a type `t`, produce a copy of `t` with
+-- the type constructor captured in `s` swapped in for the type
+-- constructor of `t`.
+--
+-- See [Note: Similar implementation].
+type family Rebuild (s :: Skeleton k) (t :: k) :: k where
+  Rebuild ('End k) _ = k
+  Rebuild ('More (s :: Skeleton (x -> k))) n = Rebuild s (GetFun n) (GetArg n :: x)
+-- We capture the kind of the argument as x, and pass it to GetArg.
+-- The kind of the first call to GetFun is fixed by the kind of f,
+-- while the kind of the second is fixed by the kind of n and the
+-- imposed kind, x, of GetArg n.
 
 -- | Given a type of the form (f b), try to extract b, assuming that b is of
 -- kind kb. Note that kb itself is an implicit argument to GetArg; the
@@ -158,19 +178,6 @@ type family GetArg (x :: kx) :: kb where
 -- surrounding context of the call must determine kf.
 type family GetFun (x :: kx) :: kf where
   GetFun (f _) = f
-
--- | Given types @n@ and @n'@, produce a constraint requiring that @n'@ be
--- built from the same newtype constructor as @n@. See [Note: Similar
--- implementation].
-type family Similar' (n :: k) (n' :: k) :: Constraint where
-  Similar' (f (_a :: ka)) n' =
-    ( Similar' f (GetFun n')
-    , n' ~ GetFun n' (GetArg n' :: ka))
-  Similar' f g = f ~ g
--- We capture the kind of the argument as ka, and pass it to GetArg.
--- The kind of the first call to GetFun is fixed by the kind of f,
--- while the kind of the second is fixed by the kind of n' and the
--- imposed kind, ka, of GetArg.
 
 {-
 [Note: Similar implementation]
@@ -186,42 +193,39 @@ careful not to force a match on one when the other is the one with information.
 The horrible way to do that (even worse :t results!) is with INCOHERENT
 typeclass instances. Ignoring that awfulness, the thing to do is to require n'
 to have a structure calculated from n and the other way around, "in parallel".
-Similar' n n' matches on n, producing a constraint. Suppose we have n ~ F a b.
-Then we get
 
-   Similar' (F a b) n'
-   (Similar' (F a) (GetFun n'), n' ~ GetFun n' (GetArg n'))
+Why build a skeleton of each type rather than just rebuilding each along the
+other? Using a skeleton lets us get full transitivity and barely-constrained
+reflexivity, both of which are really lovely properties to have.
 
-We have now constrained things only a little: n' is required to have the form p
-q for some p and q, where F a and p have the same kind and b and q have the
-same kind. Substituting in p and q, we continue:
+Here's an example of how it works.
 
-   (Similar' (F a) p, n' ~ p q)
-   ((Similar' F (GetFun p), p ~ GetFun p (GetArg p)), n' ~ p q)
+Suppose we have n ~ F a b and n'.
 
-Let's set r ~ GetFun p and s ~ GetArg p. Then
+Then
 
-   ((Similar' F r, p ~ r s), n' ~ p q)
+    GetSkeleton n
+  = GetSkeleton (F a b)
+  = 'More (GetSkeleton (F a))
+  = 'More ('More (GetSkeleton F))
+  = 'More ('More ('End F))
 
-We've now reached the base case! Yay! So the last step is
+Now
 
-   ((F ~ r, p ~ r s), n' ~ p q)
+    Rebuild (GetSkeleton n) n'
+  = Rebuild ('More ('More ('End F))) n'
+  = Rebuild ('More ('End F)) (GetFun n') (GetArg n')
+  = Rebuild ('End F) (GetFun (GetFun n')) (GetArg (GetFun n')) (GetArg n')
+  = F (GetFun (GetFun n')) (GetArg (GetFun n')) (GetArg n')
 
-which then simplifies to
-
-   n' ~ F s q
-
-Undoing the substitutions we made,
-
-   n' ~ F (GetArg (GetFun n')) (GetArg n')
-
-The arguments in that constraint are completely useless (as far as I know), but
-we need to put it all together like that to get what we're after: an equality
+So (Rebuild (GetSkeleton n) n' ~ n') forces n' to be built from the type
+constructor F. The equality constraints induced on the arguments of n'
+don't seem to be useful, but I believe this is the only way to get an equality
 constraint on n' itself that lets GHC know it's F x y for some x and y to be
 determined. Very often, those are then fixed by the type o' and the Newtype n'
 o' constraint, which at first seems backwards. Say we consider Sum. We have
 
-   type Rep (Sum a) = M1 _ _ (M1 _ _ (M1 _ _ (K1 _ a)))
+  type Rep (Sum a) = M1 _ _ (M1 _ _ (M1 _ _ (K1 _ a)))
 
 This can reduce as soon as GHC sees we have Sum whatever! So then the
 Newtype constraint can constrain the type argument to whatever's required
@@ -266,11 +270,12 @@ op _ = coerce
 -- function, with the type varying based on the /hof/ you passed.
 --
 -- The reason for the signature of the /hof/ is due to 'ala' not caring about structure.
--- To illustrate why this is important, consider this alternative implementation of 'under2':
+-- To illustrate why this is important, consider this alternative implementation of
+-- a restricted version of 'under2':
 --
--- > under2 :: (Newtype n o, Newtype n' o', Similar n n')
--- >        => (o -> n) -> (n -> n -> n') -> (o -> o -> o')
--- > under2 pa f o0 o1 = ala pa (\p -> uncurry f . bimap p p) (o0, o1)
+-- > under2' :: (Newtype n o, Newtype n' o', Similar n n')
+-- >         => (o -> n) -> (n -> n -> n') -> (o -> o -> o')
+-- > under2' pa f o0 o1 = ala pa (\p -> uncurry f . bimap p p) (o0, o1)
 --
 -- Being handed the "packer", the /hof/ may apply it in any structure of its choosing –
 -- in this case a tuple.
@@ -291,14 +296,14 @@ ala pa hof = ala' pa hof id
 -- alap _ f = unpack . f pack
 -- @
 --
--- This could be used, for example, to create a flexible version of 'under2':
+-- This could be used to implement 'under2':
 --
 -- @
--- under2'
+-- under2
 --   :: ( Newtype n o, Newtype n' o', Newtype n'' o''
 --      , Similar n n', Similar n' n'', Similar n n'' )
 --   => (o -> n) -> (n -> n' -> n'') -> (o -> o' -> o'')
--- under2' pa f o0 o1 = alap (upgrade pa) (\p -> uncurry f . bimap p p) (o0, o1)
+-- under2 pa f o0 o1 = alap (upgrade pa) (\p -> uncurry f . bimap p p) (o0, o1)
 -- @
 alap :: Newtype n o
     => (o `to` n) -> ((forall n' o'. (Newtype n' o', Similar n' n) => o' -> n') -> b -> n) -> (b -> o)
@@ -358,17 +363,9 @@ over _ f = pack #. f .# unpack
 --
 -- >>> under2 Any (<>) True False
 -- True
-under2 :: (Newtype n o, Newtype n' o', Similar n n')
-       => (o `to` n) -> (n -> n -> n') -> (o -> o -> o')
-
--- Why do we require (n -> n -> n') rather than allowing (n -> n' -> n'') as in
--- the 'alap' example?
---
--- Perhaps we should. The potential downside is that we can't write under2, per
--- se, in terms of such a more flexible function because GHC doesn't understand
--- that
---
--- forall n n'. Similar n n' => Similar n n
+under2 :: ( Newtype n o, Newtype n' o', Newtype n'' o''
+           , Similar n n', Similar n n'')
+       => (o `to` n) -> (n -> n' -> n'') -> (o -> o' -> o'')
 under2 _ = coerce
 
 -- | The opposite of 'under2'.
@@ -376,8 +373,9 @@ under2 _ = coerce
 -- @
 -- over2 _ f n0 n1 = pack $ f (unpack n0) (unpack n1)
 -- @
-over2 :: (Newtype n o, Newtype n' o', Similar n n')
-       => (o `to` n) -> (o -> o -> o') -> (n -> n -> n')
+over2 :: (Newtype n o, Newtype n' o', Newtype n'' o''
+          , Similar n n', Similar n n'')
+       => (o `to` n) -> (o -> o' -> o'') -> (n -> n' -> n'')
 over2 _ = coerce
 
 -- | 'under' lifted into functors
