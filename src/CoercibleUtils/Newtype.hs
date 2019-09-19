@@ -51,7 +51,7 @@ Furthermore, in this case, @n@ and @n'@ are required to be the /same newtype/,
 with possibly different type arguments. See 'Similar' for detailed
 documentation.
 
-@since TODO
+@since 0.1.0
 -}
 module CoercibleUtils.Newtype
   ( Newtype
@@ -65,7 +65,6 @@ module CoercibleUtils.Newtype
   , op
   , ala
   , ala'
-  , alap
   , under
   , over
   , under2
@@ -288,25 +287,6 @@ op _ = coerce
 ala :: (Newtype n o, Newtype n' o', Similar n n')
     => (o `to` n) -> ((o -> n) -> b -> n') -> (b -> o')
 ala pa hof = ala' pa hof id
-
--- | A version of 'ala' that passes a //polymorphic// packer to its argument.
---
--- @
--- alap _ f = unpack . f pack
--- @
---
--- This could be used to implement 'under2':
---
--- @
--- under2
---   :: ( Newtype n o, Newtype n' o', Newtype n'' o''
---      , Similar n n', Similar n' n'', Similar n n'' )
---   => (o -> n) -> (n -> n' -> n'') -> (o -> o' -> o'')
--- under2 pa f o0 o1 = alap (upgrade pa) (\p -> uncurry f . bimap p p) (o0, o1)
--- @
-alap :: Newtype n o
-    => (o `to` n) -> ((forall n' o'. (Newtype n' o', Similar n' n) => o' -> n') -> b -> n) -> (b -> o)
-alap _ f = unpack #. f pack
 
 -- | This is the original function seen in Conor McBride's work.
 -- The way it differs from the 'ala' function in this package,
