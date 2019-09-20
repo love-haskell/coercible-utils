@@ -51,6 +51,14 @@ Furthermore, in this case, @n@ and @n'@ are required to be the /same newtype/,
 with possibly different type arguments. See 'Similar' for detailed
 documentation.
 
+Unfortunately, the fancy type machinery in this module doesn't always produce
+the best results when asking GHCi for a type, and may result in some confusing
+type errors. Most of the worst error messages result from ambiguous types,
+so look out for the words "ambiguity check" in type errors before trying to
+puzzle through too much of the rest. Errors involving a 'Skeleton' likely
+mean that GHC failed to determine that two types are 'Similar' because they
+are ambiguous.
+
 @since 0.1.0
 -}
 module CoercibleUtils.Newtype
@@ -143,14 +151,42 @@ instance Newtype n o => HasUnderlying o n
 -- @Const Int Char@ and @Const Int Maybe@ are not @Similar@
 -- because they have different kind arguments.
 
-class (GetSkeleton n ~ GetSkeleton n', Rebuild (GetSkeleton n) n' ~ n', Rebuild (GetSkeleton n') n ~ n) => Similar n n'
+class ( GetSkeleton n ~ GetSkeleton n'
+      , Rebuild (GetSkeleton n) n' ~ n'
+      , Rebuild (GetSkeleton n') n ~ n )
+      => Similar n n'
 -- See [Note: Similar implementation]
-instance (GetSkeleton n ~ GetSkeleton n', Rebuild (GetSkeleton n) n' ~ n', Rebuild (GetSkeleton n') n ~ n) => Similar n n'
+instance ( GetSkeleton n ~ GetSkeleton n'
+         , Rebuild (GetSkeleton n) n' ~ n'
+         , Rebuild (GetSkeleton n') n ~ n
+         , SameSkeleton n n' (GetSkeleton n) (GetSkeleton n'))
+         => Similar n n'
 
-data Skeleton k = End k | forall x. More (Skeleton (x -> k))
+-- This is used solely to improve type errors when types required to be
+-- Similar definitely have different numbers of arguments.
+type family SameSkeleton (n :: k) (n' :: k) (s :: skeleton) (s' :: skeleton) :: Constraint where
+  SameSkeleton _ _ s s = ()
+  SameSkeleton n n' _ _ = TypeError
+    ('Text "The type" ':$$: 'Text "" ':$$: 'Text "    " ':<>: 'ShowType n ':$$: 'Text "" ':$$:
+     'Text "is not `Similar` to" ':$$: 'Text "" ':$$:
+     'Text "    " ':<>: 'ShowType n' ':$$: 'Text "" ':$$:
+     'Text "They have different numbers of arguments.")
+
+-- | This type records a constructor (applied to any kind arguments) and,
+-- implicitly, the kind of each applied argument.
+data Skeleton k where
+  Con :: forall k. k -> Skeleton k
+  App :: forall k x. Skeleton (x -> k) -> Skeleton k
+
+-- | Get the 'Skeleton' of a type.
+--
+-- @
+-- GetSkeleton Int = Con @Type Int
+-- GetSkeleton (SNat 3) = App @Type @Nat (Con @(Nat -> Type) SNat)
+-- @
 type family GetSkeleton (t :: k) :: Skeleton k where
-  GetSkeleton (f a) = 'More (GetSkeleton f)
-  GetSkeleton a = 'End a
+  GetSkeleton (f a) = 'App (GetSkeleton f)
+  GetSkeleton a = 'Con a
 
 -- | Given a skeleton `s` and a type `t`, produce a copy of `t` with
 -- the type constructor captured in `s` swapped in for the type
@@ -158,22 +194,22 @@ type family GetSkeleton (t :: k) :: Skeleton k where
 --
 -- See [Note: Similar implementation].
 type family Rebuild (s :: Skeleton k) (t :: k) :: k where
-  Rebuild ('End k) _ = k
-  Rebuild ('More (s :: Skeleton (x -> k))) n = Rebuild s (GetFun n) (GetArg n :: x)
+  Rebuild ('Con k) _ = k
+  Rebuild ('App (s :: Skeleton (x -> k))) n = Rebuild s (GetFun n) (GetArg n :: x)
 -- We capture the kind of the argument as x, and pass it to GetArg.
 -- The kind of the first call to GetFun is fixed by the kind of f,
 -- while the kind of the second is fixed by the kind of n and the
 -- imposed kind, x, of GetArg n.
 
--- | Given a type of the form (f b), try to extract b, assuming that b is of
--- kind kb. Note that kb itself is an implicit argument to GetArg; the
--- surrounding context of the call must determine kb.
+-- | Given a type of the form @(f b)@, try to extract @b@, assuming that @b@ is
+-- of kind @kb@. Note that @kb@ itself is an implicit argument to @GetArg@; the
+-- surrounding context of the call must determine @kb@.
 type family GetArg (x :: kx) :: kb where
   GetArg (_ b) = b
 
--- | Given a type of the form (f b), try to extract f, assuming that f is of
--- kind kf. Note that kf itself is an implicit argument to GetFun; the
--- surrounding context of the call must determine kf.
+-- | Given a type of the form @(f b)@, try to extract @f@, assuming that @f@ is
+-- of kind @kf@. Note that @kf@ itself is an implicit argument to @GetFun@; the
+-- surrounding context of the call must determine @kf@.
 type family GetFun (x :: kx) :: kf where
   GetFun (f _) = f
 
@@ -204,16 +240,16 @@ Then
 
     GetSkeleton n
   = GetSkeleton (F a b)
-  = 'More (GetSkeleton (F a))
-  = 'More ('More (GetSkeleton F))
-  = 'More ('More ('End F))
+  = 'App (GetSkeleton (F a))
+  = 'App ('App (GetSkeleton F))
+  = 'App ('App ('Con F))
 
 Now
 
     Rebuild (GetSkeleton n) n'
-  = Rebuild ('More ('More ('End F))) n'
-  = Rebuild ('More ('End F)) (GetFun n') (GetArg n')
-  = Rebuild ('End F) (GetFun (GetFun n')) (GetArg (GetFun n')) (GetArg n')
+  = Rebuild ('App ('App ('Con F))) n'
+  = Rebuild ('App ('Con F)) (GetFun n') (GetArg n')
+  = Rebuild ('Con F) (GetFun (GetFun n')) (GetArg (GetFun n')) (GetArg n')
   = F (GetFun (GetFun n')) (GetArg (GetFun n')) (GetArg n')
 
 So (Rebuild (GetSkeleton n) n' ~ n') forces n' to be built from the type
