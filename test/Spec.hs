@@ -12,8 +12,8 @@ module Main
   ( main
   -- Exported to avoid unused warnings
   , trans
-  , refl
   , sym
+  , partialRefl
   ) where
 import Data.Monoid (Sum (..), All (..))
 import CoercibleUtils.Newtype
@@ -23,21 +23,30 @@ import Type.Reflection
 -- if they're not!
 default ()
 
+-- Similarity is a partial equivalence relation
+-- https://en.wikipedia.org/wiki/Partial_equivalence_relation
+
+-- Similarity is transitive.
+trans :: (Similar a b, Similar b c) => proxy b -> Dict (Similar a c)
+trans _ = Dict
+
+-- Similarity is symmetric.
+sym :: Similar a b => Dict (Similar b a)
+sym = Dict
+
+-- We don't get unqualified reflexivity, but we get something fairly
+-- close: if a type is similar to *some* other type, then it's similar
+-- to itself. Mathematically, this follows from transitivity and
+-- symmetry, but we test it separately to verify that GHC's constraint
+-- solver gets it too.
+partialRefl :: Similar a b => proxy b -> Dict (Similar a a)
+partialRefl _ = Dict
+
 -- Copied from the constraints package
 data Dict c where
   Dict :: c => Dict c
 
-trans :: (Similar a b, Similar b c) => proxy b -> Dict (Similar a c)
-trans _ = Dict
-
--- We don't get unqualified reflexivity, but we get something really
--- close: if a type is similar to *some* other type, then it's similar
--- to itself.
-refl :: Similar a b => proxy b -> Dict (Similar a a)
-refl _ = Dict
-
-sym :: Similar a b => Dict (Similar b a)
-sym = Dict
+-- ------------------
 
 pack_test0 :: _ -> All
 pack_test0 = pack
