@@ -163,14 +163,13 @@ instance ( GetSkeleton n ~ GetSkeleton n'
          => Similar n n'
 
 -- This is used solely to improve type errors when types required to be
--- Similar definitely have different numbers of arguments.
+-- Similar definitely aren't.
 type family SameSkeleton (n :: k) (n' :: k) (s :: skeleton) (s' :: skeleton) :: Constraint where
   SameSkeleton _ _ s s = ()
   SameSkeleton n n' _ _ = TypeError
     ('Text "The type" ':$$: 'Text "" ':$$: 'Text "    " ':<>: 'ShowType n ':$$: 'Text "" ':$$:
      'Text "is not `Similar` to" ':$$: 'Text "" ':$$:
-     'Text "    " ':<>: 'ShowType n' ':$$: 'Text "" ':$$:
-     'Text "They have different numbers of arguments.")
+     'Text "    " ':<>: 'ShowType n' ':$$: 'Text "")
 
 -- | This type records a constructor (applied to any kind arguments) and,
 -- implicitly, the kind of each applied argument.
