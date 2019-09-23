@@ -22,6 +22,7 @@ library
   exposed-modules:     CoercibleUtils
                      , CoercibleUtils.Compose
                      , CoercibleUtils.Newtype
+                     , CoercibleUtils.Wild
                        
   ghc-options:         -Wall
   build-depends:       base >= 4.11 && < 4.14

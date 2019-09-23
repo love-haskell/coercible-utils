@@ -85,6 +85,7 @@ import GHC.Generics
 import Data.Coerce
 import GHC.TypeLits (TypeError, ErrorMessage (..))
 import CoercibleUtils.Compose ((#.), (.#))
+import CoercibleUtils.Wild (op)
 import Data.Kind (Constraint)
 
 -- | Get the underlying type of a newtype.
@@ -284,19 +285,6 @@ upgrade :: (Newtype n o, Newtype n' o', Similar n n')
         => (o `to` n) -> o' -> n'
 upgrade _ = pack
 {-# INLINE upgrade #-}
-
--- | Reverse the type of a "packer".
---
--- >>> op All (All True)
--- True
--- >>> op (Identity . Sum) (Identity (Sum 3))
--- 3
-op :: Coercible a b
-   => (a `to` b)
-   -> b
-   -> a
-op _ = coerce
-{-# INLINE op #-}
 
 -- | The workhorse of the package. Given a "packer" and a \"higher order function\" (/hof/),
 -- it handles the packing and unpacking, and just sends you back a regular old

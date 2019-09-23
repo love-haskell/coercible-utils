@@ -3,6 +3,8 @@
 
 ## [0.2.0]
 
+* Restore the version 0.0.0 API in a new module, `CoercibleUtils.Wild`.
+
 * Install a missing fundep that prevented things like `pack . pack`
   from typechecking.
 
